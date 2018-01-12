@@ -40,12 +40,10 @@ fromList' :: [a] -> Tree a
 fromList' = head . snd . rows
   where
     rows xs = foldr f (\_ _ -> (\_ _ -> [], [Leaf])) xs 1 1
-    f e a !k m =
-        case m of
-            1 -> (\_ _ -> [], g e ys k zs (drop k zs)) where (ys,zs) = a (k * 2) k
-            _ -> (g e ys m, zs) where (ys,zs) = a k (m - 1)
-    g _ _ 0 _ _ = []
-    g x xs !_ (y:ys) (z:zs) = Node x y z : xs ys zs
-    g x xs !_ [] (z:zs) = Node x Leaf z : xs [] zs
-    g x xs !_ (y:ys) [] = Node x y Leaf : xs ys []
-    g x xs !_ [] [] = Node x Leaf Leaf : xs [] []
+    f e a !k 1 = (\_ _ -> [], g e ys zs (drop k zs)) where (ys,zs) = a (k * 2) k
+    f e a !k !m = (g e ys, zs) where (ys,zs) = a k (m - 1)
+    g x xs (y:ys) (z:zs) = Node x y z : xs ys zs
+    g x xs [] (z:zs) = Node x Leaf z : xs [] zs
+    g x xs (y:ys) [] = Node x y Leaf : xs ys []
+    g x xs [] [] = Node x Leaf Leaf : xs [] []
+    {-# NOINLINE g #-}
