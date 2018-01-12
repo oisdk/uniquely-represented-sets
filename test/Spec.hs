@@ -1,2 +1,5 @@
+import Test.DocTest
+import Test.QuickCheck
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = doctest ["-isrc", "src/"]
