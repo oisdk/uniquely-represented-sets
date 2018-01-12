@@ -37,13 +37,17 @@ toList (Node x ys zs) = x:go [ys,zs] [] []
 --
 -- prop> fromList' xs == preFromList (xs :: [Int])
 fromList' :: [a] -> Tree a
-fromList' = head . snd . rows
+fromList' = rows
   where
-    rows xs = foldr f (\_ _ -> (\_ _ -> [], [Leaf])) xs 1 1
-    f e a !k 1 = (\_ _ -> [], g e ys zs (drop k zs)) where (ys,zs) = a (k * 2) k
-    f e a !k !m = (g e ys, zs) where (ys,zs) = a k (m - 1)
-    g x xs (y:ys) (z:zs) = Node x y z : xs ys zs
-    g x xs [] (z:zs) = Node x Leaf z : xs [] zs
-    g x xs (y:ys) [] = Node x y Leaf : xs ys []
-    g x xs [] [] = Node x Leaf Leaf : xs [] []
+    rows xs = foldr f (\_ _ p -> p b [Leaf]) xs 1 1 (const head)
+
+    f e a !k 1 p = a (k*2) k (\ys zs -> p b (g e ys zs (drop k zs)))
+    f e a !k !m p = a k (m-1) (p . g e)
+
+    b _ _ = []
+
+    g x xs (y:ys) (z:zs) = Node x y    z    : xs ys zs
+    g x xs [] (z:zs)     = Node x Leaf z    : xs [] zs
+    g x xs (y:ys) []     = Node x y    Leaf : xs ys []
+    g x xs [] []         = Node x Leaf Leaf : xs [] []
     {-# NOINLINE g #-}
