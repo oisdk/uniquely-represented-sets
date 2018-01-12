@@ -1,0 +1,31 @@
+name:                Unique
+version:             0.1.0.0
+github:              "oisdk/Unique"
+license:             MIT
+author:              "Donnacha Oisín Kidney"
+maintainer:          "mail@doisinkidney.com"
+copyright:           "2018 Donnacha Oisín Kidney"
+
+extra-source-files:
+- README.md
+
+description:         Please see the README on Github at <https://github.com/oisdk/Unique#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+tests:
+  Unique-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - Unique
+    - QuickCheck
+    - doctest
