@@ -134,7 +134,8 @@ fixupList [] _ = []
 fixupList [x] (z:zs) = case compare (Braun.size x) z of
   LT -> if Braun.size x == 0 then [] else [x]
   EQ -> [x]
-  GT -> Braun.toList (unSet (fromList (Braun.toList x)))
+  GT -> let (q,qs) = Braun.popBack x
+        in fixupList [qs, Braun.Braun 1 (Node q Leaf Leaf)] (z:zs)
 fixupList (x:y:ys) (z:zs) =
   case compare (Braun.size x) z of
     EQ -> x:fixupList (y:ys) zs

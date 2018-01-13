@@ -138,11 +138,15 @@ popFront (Braun n p) = (x', Braun (n-1) np) where
     (lp,q) = go y
   go _ = errorWithoutStackTrace "Data.Braun.Sized.popFront: bug!"
 
+-- |
+--
+-- prop> Unsized.isBraun (tree (snd (popBack (fromList (1:xs)))))
+-- prop> fst (popBack (fromList (1:xs))) == last (1:xs)
 popBack :: Braun a -> (a, Braun a)
 popBack (Braun _ (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
 popBack (Braun n (Node x y z))
-  | even n =
-      let (p,Braun _ q) = popBack (Braun (m - 1) z)
+  | odd n =
+      let (p,Braun _ q) = popBack (Braun m z)
       in (p, Braun (n - 1) (Node x y q))
   | otherwise =
       let (p,Braun _ q) = popBack (Braun m y)
