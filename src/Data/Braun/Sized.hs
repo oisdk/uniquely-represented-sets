@@ -1,5 +1,6 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE RankNTypes   #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RankNTypes    #-}
 
 module Data.Braun.Sized where
 
@@ -13,7 +14,7 @@ import           Data.Tree  (Tree (..))
 data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
     , tree :: Tree a
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Functor)
 
 instance Foldable Braun where
     foldr f b (Braun _ xs) = Unsized.toListFB xs f b
@@ -51,6 +52,9 @@ runB xs = xs 1 1 0 (const (flip Braun . head))
 fromList :: [a] -> Braun a
 fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
+
+empty :: Braun a
+empty = Braun 0 Leaf
 
 -- |
 --
@@ -123,7 +127,7 @@ toList (Braun _ xs) = Unsized.toList xs
 
 pushFront :: a -> Braun a -> Braun a
 pushFront x' (Braun n xs) = Braun (n+1) (go x' xs) where
-  go x Leaf = Node x Leaf Leaf
+  go x Leaf         = Node x Leaf Leaf
   go x (Node y p q) = Node x (go y q) p
 
 popFront :: Braun a -> (a, Braun a)
@@ -135,7 +139,7 @@ popFront (Braun n p) = (x', Braun (n-1) np) where
   go _ = errorWithoutStackTrace "Data.Braun.Sized.popFront: bug!"
 
 popBack :: Braun a -> (a, Braun a)
-popBack (Braun 1 (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
+popBack (Braun _ (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
 popBack (Braun n (Node x y z))
   | even n =
       let (p,Braun _ q) = popBack (Braun (m - 1) z)
@@ -145,4 +149,4 @@ popBack (Braun n (Node x y z))
       in (p, Braun (n - 1) (Node x q z))
   where
     m = n `div` 2
-popBack _ = errorWithoutStackTrace "Data.Braun.Sized.popBack: bug!"
+popBack x = error ("Data.Braun.Sized.popBack: bug!" ++ show (fmap (const ()) x))

@@ -7,11 +7,13 @@ import qualified Data.Braun       as Unsized
 import           Data.Braun.Sized (Braun (..))
 import qualified Data.Braun.Sized as Braun
 import           Data.Tree        (Tree (..))
-
+import           GHC.Base         (build)
 -- $setup
 -- >>> import Test.QuickCheck
 -- >>> import Data.List (sort,nub)
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
+-- >>> let safeInit xs = if null xs then [] else init xs
+-- >>> let fromListIns xs = foldr insert empty (xs :: [Int])
 
 data Set a =
     Set {-# UNPACK #-} !Int
@@ -50,10 +52,14 @@ empty :: Set a
 empty = Set 0 (Braun 0 Leaf)
 
 sizes :: [Int]
-sizes =
-    [ max 1 (round (j * sqrt (logBase 2 j)))
-    | i <- [1 ..]
-    , let j = fromIntegral (i :: Int) :: Double ]
+sizes = map szfn [1..]
+
+
+-- |
+--
+-- prop> toList (fromList xs) === xs
+toList :: Set a -> [a]
+toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
 
 -- |
 --
@@ -62,6 +68,7 @@ sizes =
 -- prop> Braun.validSize (unSet (fromList xs))
 -- prop> Unsized.isBraun (tree (unSet (fromList xs)))
 -- prop> all (Unsized.isBraun . tree) (unSet (fromList xs))
+-- prop> validSizes (fromList xs)
 fromList :: [a] -> Set a
 fromList xs = runB (foldr consB nilB xs)
 
@@ -72,9 +79,29 @@ comp y b = let (h,_) = Braun.popFront b
 ltc :: Ord a => a -> Braun a -> Bool
 ltc x y = comp x y == LT
 
+validSizes :: Set a -> Bool
+validSizes (Set _ b) = null xs || it && re where
+  xs = Braun.toList b
+  it = and $ zipWith (\x y -> size x == szfn y) (safeInit xs) [1..]
+  safeInit [] = []
+  safeInit ys = init ys
+  re = size (last xs) <= szfn (length xs)
+
+
+
 -- |
 --
+-- >>> toList (foldr insert empty [3,1,2,5,4,3,6])
+-- [1,2,3,4,5,6]
+--
+-- prop> length (nub xs) === sizeS (fromListIns xs)
+-- prop> all Braun.validSize (unSet (fromListIns xs))
+-- prop> Braun.validSize (unSet (fromListIns xs))
+-- prop> Unsized.isBraun (tree (unSet (fromListIns xs)))
+-- prop> all (Unsized.isBraun . tree) (unSet (fromListIns xs))
+-- prop> validSizes (fromListIns xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
+-- prop> shuffleProp (\xs ys -> fromList (sort (nub xs)) === foldr insert empty ys)
 insert :: Ord a => a -> Set a -> Set a
 insert x (Set 0 _) = Set 1 (Braun.fromList [Braun.fromList [x]])
 insert x (Set _ xs) =
@@ -104,10 +131,10 @@ delete x (Set _ xs) =
 
 fixupList :: [Braun a] -> [Int] -> [Braun a]
 fixupList [] _ = []
-fixupList [x] _ =
-  if Braun.size x == 0
-  then []
-  else [x]
+fixupList [x] (z:zs) = case compare (Braun.size x) z of
+  LT -> if Braun.size x == 0 then [] else [x]
+  EQ -> [x]
+  GT -> Braun.toList (unSet (fromList (Braun.toList x)))
 fixupList (x:y:ys) (z:zs) =
   case compare (Braun.size x) z of
     EQ -> x:fixupList (y:ys) zs
