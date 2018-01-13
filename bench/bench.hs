@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 module Main (main) where
 
 import Criterion.Main
@@ -9,9 +11,17 @@ toListSize n =
     \xs ->
          bgroup
              (show n)
-             [bench "old" $ nf toList' xs, bench "new" $ nf toList xs]
+             [ bench "trav" $ nf (flip runState (0 :: Int) . traverseBraun (\x -> State (\i -> (x,i+1)))) xs]
+
+newtype State s a = State { runState :: s -> (a, s) } deriving Functor
+
+instance Applicative (State s) where
+    pure x = State (\s -> (x, s))
+    fs <*> xs = State (\s -> case runState fs s of
+                          (f,s') -> case runState xs s' of
+                            (x,s'') -> (f x, s''))
 
 main =
     defaultMain
-        [ toListSize (10 ^ n)
-        | n <- [3 .. 8] ]
+        [ toListSize n
+        | n <- [1000, 10000, 100000, 1000000, 3000000]]

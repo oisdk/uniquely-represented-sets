@@ -4,40 +4,12 @@
 
 module Data.Braun where
 
--- import qualified Data.Tree as Tree
-import           Data.Tree (Tree (..))
+import           Data.Tree (Tree (..), zygoTree)
 import           GHC.Base  (build)
+import           Control.Applicative
 
--- preFromList :: [a] -> Tree a
--- preFromList [] = Leaf
--- preFromList (x:xs) =
---     let (od,ev) = unLink $ preFromList $ pairUp xs
---     in Node x od ev
-
--- pairUp :: [a] -> [(a, Maybe a)]
--- pairUp [] = []
--- pairUp [x] = [(x,Nothing)]
--- pairUp (x:y:ys) = (x,Just y):pairUp ys
-
--- unLink :: Tree (a,Maybe b) -> (Tree a,Tree b)
--- unLink Leaf = (Leaf,Leaf)
--- unLink (Node (x,Nothing) Leaf Leaf) = (Node x Leaf Leaf,Leaf)
--- unLink (Node (x,Just y) od ev) =
---   let (odx,ody) = unLink od
---       (evx,evy) = unLink ev
---   in (Node x odx evx, Node y ody evy)
-
-toList :: Tree a -> [a]
-toList t = build (\(c :: a -> b -> b) (n :: b) ->
-  let b :: [Tree a] -> [Tree a] -> b
-      b [] _ = n
-      b _ [] = n
-      b r s  = foldr revf id r (foldr revf id s b) [] []
-      go :: Tree a -> ([Tree a] -> [Tree a] -> b) -> [Tree a] -> [Tree a] -> b
-      go Leaf ps l r           = ps l r
-      go (Node p qs rs) ss l r = p `c` ss (qs:l) (rs:r)
-      revf x y z  = y (go x z)
-  in go t b [] [])
+-- $setup
+-- >>> import Test.QuickCheck
 
 -- |
 --
@@ -56,26 +28,54 @@ fromList xs = foldr f (\_ _ p -> p b [Leaf]) xs 1 1 (const head)
     g x a [] []         = Node x Leaf Leaf : a [] []
     {-# NOINLINE g #-}
 
-toList' Leaf = []
-toList' t = tol [t]
-  where tol [] = []
-        tol ts = xs ++ tol (ts1 ++ ts2)
-          where xs = map root ts
-                (ts1,ts2) = children ts
+toList :: Tree a -> [a]
+toList tr =
+    build
+        (\c n ->
+              case tr of
+                  Leaf -> n
+                  _ -> tol [tr]
+                      where tol [] = n
+                            tol xs = foldr (c . root) (tol (children xs id)) xs
+                            children []                 k = k []
+                            children (Node _ Leaf _:_)  k = k []
+                            children (Node _ l Leaf:ts) k = l : foldr leftChildren (k []) ts
+                            children (Node _ l r:ts)    k = l : children ts (k . (:) r)
+                            children _ _                  = errorWithoutStackTrace "Data.Braun.toList: bug!"
+                            leftChildren (Node _ Leaf _) _ = []
+                            leftChildren (Node _ l _) a    = l : a
+                            leftChildren _ _               = errorWithoutStackTrace "Data.Braun.toList: bug!"
+                            root (Node x _ _) = x
+                            root _ = errorWithoutStackTrace "Data.Braun.toList: bug!")
 
-                children [] = ([],[])
-                children (Node _ Leaf _ : _) = ([],[])
-                children (Node _ a Leaf : ts) = (a : leftChildren ts, [])
-                children (Node _ a b : ts) = (a : ts1, b : ts2)
-                  where (ts1, ts2) = children ts
-                children _ = error "BraunSeq.toList: bug!"
+-- |
+--
+-- prop> size (fromList xs) == length xs
+size :: Tree a -> Int
+size Leaf = 0
+size (Node _ l r) = 1 + 2 * m + diff l m where
+  m = size r
+  diff Leaf 0 = 0
+  diff (Node _ Leaf Leaf) 0 = 1
+  diff (Node _ s t) k
+      | odd k = diff s (k `div` 2)
+      | otherwise = diff t ((k `div` 2) - 1)
+  diff Leaf _ = errorWithoutStackTrace "Data.Braun.size: bug!"
 
-                leftChildren [] = []
-                leftChildren (Node _ Leaf _ : _) = []
-                leftChildren (Node _ a _ : ts) = a : leftChildren ts
-                leftChildren _ = error "BraunSeq.toList: bug!"
+-- |
+--
+-- prop> isBraun (fromList xs)
+isBraun :: Tree a -> Bool
+isBraun = zygoTree (0 :: Int) (\_ l r -> 1 + l + r) True alg where
+  alg _ lsize lbrn rsize rbrn = lbrn && rbrn && (lsize == rsize || lsize - 1 == rsize)
 
-                root (Node x _ _) = x
-                root _            = error "BraunSeq.toList: bug!"
-
-                (Node _ a _) = a
+-- |
+--
+-- prop> size (copy () (getNonNegative n)) == getNonNegative n
+copy :: a -> Int -> Tree a
+copy x = flip go (const id)
+  where
+    go 0 k = k (Node x Leaf Leaf) Leaf
+    go n k
+      | odd n = go (pred n `div` 2) $ \s t -> k (Node x s t) (Node x t t)
+      | otherwise = go (pred n `div` 2) $ \s t -> k (Node x s s) (Node x s t)
