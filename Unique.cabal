@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: df845cb7b624408c7f3bfd7f03608aca399e636d55c5c83eaecf1228815b1c69
+-- hash: 7b5ce868e79a5978b4a0f4f8419605c29eba44732e2adf89c958e440cfd237ca
 
 name:           Unique
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
     , deepseq
   exposed-modules:
       Data.Braun
+      Data.Braun.Sized
       Data.Tree
   other-modules:
       Paths_Unique
