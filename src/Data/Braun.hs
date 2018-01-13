@@ -14,39 +14,55 @@ import           GHC.Base  (build)
 --
 -- prop> toList (fromList xs) == (xs :: [Int])
 fromList :: [a] -> Tree a
-fromList xs = foldr f (\_ _ p -> p b [Leaf]) xs 1 1 (const head)
-  where
-    f e a !k 1 p  = a (k*2) k (\ys zs -> p b (g e ys zs (drop k zs)))
-    f e a !k !m p = a k (m-1) (p . g e)
-
-    b _ _ = []
-
-    g x a (y:ys) (z:zs) = Node x y    z    : a ys zs
-    g x a [] (z:zs)     = Node x Leaf z    : a [] zs
-    g x a (y:ys) []     = Node x y    Leaf : a ys []
-    g x a [] []         = Node x Leaf Leaf : a [] []
-    {-# NOINLINE g #-}
+fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
 
+type Builder a b c = (Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> b) -> c)
+
+consB :: a -> Builder a b c -> Builder a b c
+consB e a !k 1 p  = a (k*2) k (\ys zs -> p (\_ _ -> []) (runZip e ys zs (drop k zs)))
+consB e a !k !m p = a k (m-1) (p . runZip e)
+{-# INLINE consB #-}
+
+nilB :: Builder a b b
+nilB _ _ p = p (\_ _ -> []) [Leaf]
+{-# INLINE nilB #-}
+
+runB :: Builder a (Tree a) (Tree a) -> Tree a
+runB b = b 1 1 (const head)
+{-# INLINE runB #-}
+
+runZip :: a -> ([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> [Tree a] -> [Tree a]
+runZip x a (y:ys) (z:zs) = Node x y    z    : a ys zs
+runZip x a [] (z:zs)     = Node x Leaf z    : a [] zs
+runZip x a (y:ys) []     = Node x y    Leaf : a ys []
+runZip x a [] []         = Node x Leaf Leaf : a [] []
+{-# NOINLINE runZip #-}
+
+toListFB :: Tree a -> (a -> b -> b) -> b -> b
+toListFB tr c n =
+    case tr of
+        Leaf -> n
+        _ -> tol [tr]
+            where tol [] = n
+                  tol xs = foldr (c . root) (tol (children xs id)) xs
+                  children [] k = k []
+                  children (Node _ Leaf _:_) k = k []
+                  children (Node _ l Leaf:ts) k =
+                      l : foldr leftChildren (k []) ts
+                  children (Node _ l r:ts) k = l : children ts (k . (:) r)
+                  children _ _ =
+                      errorWithoutStackTrace "Data.Braun.toList: bug!"
+                  leftChildren (Node _ Leaf _) _ = []
+                  leftChildren (Node _ l _) a = l : a
+                  leftChildren _ _ =
+                      errorWithoutStackTrace "Data.Braun.toList: bug!"
+                  root (Node x _ _) = x
+                  root _ = errorWithoutStackTrace "Data.Braun.toList: bug!"
+{-# INLINE toListFB #-}
+
 toList :: Tree a -> [a]
-toList tr =
-    build
-        (\c n ->
-              case tr of
-                  Leaf -> n
-                  _ -> tol [tr]
-                      where tol [] = n
-                            tol xs = foldr (c . root) (tol (children xs id)) xs
-                            children []                 k = k []
-                            children (Node _ Leaf _:_)  k = k []
-                            children (Node _ l Leaf:ts) k = l : foldr leftChildren (k []) ts
-                            children (Node _ l r:ts)    k = l : children ts (k . (:) r)
-                            children _ _                  = errorWithoutStackTrace "Data.Braun.toList: bug!"
-                            leftChildren (Node _ Leaf _) _ = []
-                            leftChildren (Node _ l _) a    = l : a
-                            leftChildren _ _               = errorWithoutStackTrace "Data.Braun.toList: bug!"
-                            root (Node x _ _) = x
-                            root _ = errorWithoutStackTrace "Data.Braun.toList: bug!")
+toList tr = build (toListFB tr)
 {-# INLINABLE toList #-}
 
 -- |
@@ -83,6 +99,9 @@ copy x = flip go (const id)
       | odd n = go (pred n `div` 2) $ \s t -> k (Node x s t) (Node x t t)
       | otherwise = go (pred n `div` 2) $ \s t -> k (Node x s s) (Node x s t)
 
+-- |
+--
+-- prop> \(NonNegative n) xs -> n < length xs ==> fromList xs ! n == xs !! n
 (!) :: Tree a -> Int -> a
 (!) (Node x _ _) 0 = x
 (!) (Node _ y z) i
@@ -98,8 +117,8 @@ data UpperBound a = Exact a
 ub :: (a -> b -> Ordering) -> a -> Tree b -> UpperBound b
 ub f x t = go f x t 0 1
   where
-    go _ _ Leaf _ _ = Finite
-    go _ _ (Node hd _ ev) n k =
+    go _ _ Leaf !_ !_ = Finite
+    go _ _ (Node hd _ ev) !n !k =
       case f x hd of
         LT -> TooHigh n
         EQ -> Exact hd

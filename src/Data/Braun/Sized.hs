@@ -1,11 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RankNTypes   #-}
 
 module Data.Braun.Sized where
 
 import           Data.Braun (UpperBound (..))
 import qualified Data.Braun as Unsized
 import           Data.Tree  (Tree (..))
-import           GHC.Base   (build)
 
 -- $setup
 -- >>> import Data.List (sort, nub)
@@ -14,6 +14,12 @@ data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
     , tree :: Tree a
     } deriving (Eq, Show)
+
+instance Foldable Braun where
+    foldr f b (Braun _ xs) = Unsized.toListFB xs f b
+
+validSize :: Braun a -> Bool
+validSize (Braun n xs) = n == length xs
 
 pushBack :: a -> Braun a -> Braun a
 pushBack x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
@@ -24,22 +30,26 @@ pushBack x (Braun n (Node y z w))
     m = n `div` 2
 pushBack _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Braun.Sized.pushBack: bug!"
 
+type Builder a b c = (Int -> Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> Int -> b) -> c)
+
+consB :: a -> Builder a b c -> Builder a b c
+consB e a !k 1  !s p = a (k*2) k (s+1) (\ys zs -> p (\_ _ -> []) (Unsized.runZip e ys zs (drop k zs)))
+consB e a !k !m !s p = a k (m-1) (s+1) (p . Unsized.runZip e)
+{-# INLINE consB #-}
+
+nilB :: Builder a b b
+nilB _ _ s p = p (\_ _ -> []) [Leaf] s
+{-# INLINE nilB #-}
+
+runB :: Builder a (Braun a) (Braun a) -> Braun a
+runB xs = xs 1 1 0 (const (flip Braun . head))
+{-# INLINE runB #-}
+
 -- |
 --
 -- prop> size (fromList xs) == length xs
 fromList :: [a] -> Braun a
-fromList xs = foldr f (\_ _ s p -> p b [Leaf] s) xs 1 1 0 (const (flip Braun . head))
-  where
-    f e a !k 1  !s p = a (k*2) k (s+1) (\ys zs -> p b (g e ys zs (drop k zs)))
-    f e a !k !m !s p = a k (m-1) (s+1) (p . g e)
-
-    b _ _ = []
-
-    g x a (y:ys) (z:zs) = Node x y    z    : a ys zs
-    g x a [] (z:zs)     = Node x Leaf z    : a [] zs
-    g x a (y:ys) []     = Node x y    Leaf : a ys []
-    g x a [] []         = Node x Leaf Leaf : a [] []
-    {-# NOINLINE g #-}
+fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
 
 -- |
@@ -47,21 +57,28 @@ fromList xs = foldr f (\_ _ s p -> p b [Leaf] s) xs 1 1 0 (const (flip Braun . h
 -- prop> foldr (insert compare) (Braun 0 Leaf) xs == fromList (sort (nub xs))
 insert :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
 insert cmp x b@(Braun s xs) =
-    case break (\y -> cmp x y /= GT) (Unsized.toList xs) of
+    case break
+             (\y ->
+                   cmp x y /= GT)
+             (Unsized.toList xs) of
         (_,[]) -> pushBack x b
         (lt,gte@(y:_)) ->
             if cmp x y == EQ
                 then b
                 else Braun
                          (s + 1)
-                         (Unsized.fromList
-                              (build (\c n -> foldr c (c x (foldr c n gte)) lt)))
+                         (Unsized.runB
+                              (foldr
+                                   Unsized.consB
+                                   (Unsized.consB
+                                        x
+                                        (foldr Unsized.consB Unsized.nilB gte))
+                                   lt))
 
 delete :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
 delete cmp x b@(Braun s xs) =
     case break
-             (\y ->
-                   cmp x y /= GT)
+             (\y -> cmp x y /= GT)
              (Unsized.toList xs) of
         (_,[]) -> b
         (lt,y:gt) ->
@@ -69,8 +86,7 @@ delete cmp x b@(Braun s xs) =
                 then b
                 else Braun
                          (s - 1)
-                         (Unsized.fromList
-                              (build (\c n -> foldr c (foldr c n gt) lt)))
+                              (Unsized.runB (foldr Unsized.consB (foldr Unsized.consB Unsized.nilB gt) lt))
 
 glb :: (a -> b -> Ordering) -> a -> Braun b -> Maybe b
 glb _ _ (Braun _ Leaf) = Nothing
