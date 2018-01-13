@@ -107,7 +107,7 @@ insert x (Set 0 _) = Set 1 (Braun.fromList [Braun.fromList [x]])
 insert x (Set _ xs) =
     let (lte,gt) = break (ltc x) $ Braun.toList xs
         final ps =
-            let qs = fixupList ps sizes
+            let qs = fixupList ps
                 m = sum $ map Braun.size qs
             in Set m (Braun.fromList qs)
     in final $
@@ -120,7 +120,7 @@ delete :: Ord a => a -> Set a -> Set a
 delete _ (Set 0 _) = empty
 delete x (Set _ xs) =
   let (lte,gt) = break (ltc x) $ Braun.toList xs
-      final ps = let qs = fixupList ps sizes
+      final ps = let qs = fixupList ps
                      m = sum $ map Braun.size qs
                  in Set m (Braun.fromList qs)
   in final $
@@ -129,17 +129,17 @@ delete x (Set _ xs) =
        (eq:rev_lt) -> reverse rev_lt ++ [Braun.delete compare x eq] ++ gt
 
 
-fixupList :: [Braun a] -> [Int] -> [Braun a]
-fixupList [] _ = []
-fixupList [x] (z:zs) = case compare (Braun.size x) z of
-  LT -> if Braun.size x == 0 then [] else [x]
-  EQ -> [x]
-  GT -> let (q,qs) = Braun.popBack x
-        in fixupList [qs, Braun.Braun 1 (Node q Leaf Leaf)] (z:zs)
-fixupList (x:y:ys) (z:zs) =
-  case compare (Braun.size x) z of
-    EQ -> x:fixupList (y:ys) zs
-    LT -> let (p,ps) = Braun.popFront y
-          in fixupList (Braun.pushBack p x:ps:ys) (z:zs)
-    GT -> let (q,qs) = Braun.popBack x
-          in fixupList (qs:Braun.pushFront q y:ys) (z:zs)
+fixupList :: [Braun a] -> [Braun a]
+fixupList = go 1 where
+  go !_ [] = []
+  go !i [x] = case compare (Braun.size x) (szfn i) of
+    LT | Braun.size x == 0 -> []
+    GT -> let (q,qs) = Braun.popBack x in [qs, Braun.Braun 1 (Node q Leaf Leaf)]
+    _ -> [x]
+  go !i (x:y:ys) =
+    case compare (Braun.size x) (szfn i) of
+      EQ -> x : go (i+1) (y:ys)
+      LT -> let (p,ps) = Braun.popFront y
+            in Braun.pushBack p x : go (i+1) (ps:ys)
+      GT -> let (q,qs) = Braun.popBack x
+            in qs : go (i+1) (Braun.pushFront q y:ys)

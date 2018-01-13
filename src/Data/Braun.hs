@@ -9,6 +9,7 @@ import           GHC.Base  (build)
 
 -- $setup
 -- >>> import Test.QuickCheck
+-- >>> import Data.List (unfoldr)
 
 -- |
 --
@@ -32,7 +33,11 @@ runB :: Builder a (Tree a) (Tree a) -> Tree a
 runB b = b 1 1 (const head)
 {-# INLINE runB #-}
 
-runZip :: a -> ([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> [Tree a] -> [Tree a]
+runZip :: a
+       -> ([Tree a] -> [Tree a] -> [Tree a])
+       -> [Tree a]
+       -> [Tree a]
+       -> [Tree a]
 runZip x a (y:ys) (z:zs) = Node x y    z    : a ys zs
 runZip x a [] (z:zs)     = Node x Leaf z    : a [] zs
 runZip x a (y:ys) []     = Node x y    Leaf : a ys []
@@ -123,3 +128,25 @@ ub f x t = go f x t 0 1
         LT -> TooHigh n
         EQ -> Exact hd
         GT -> go f x ev (n+2*k) (2*k)
+
+-- |
+--
+-- prop> unfoldr uncons (fromList xs) == xs
+uncons :: Tree a -> Maybe (a, Tree a)
+uncons (Node x Leaf Leaf) = Just (x, Leaf)
+uncons (Node x y z) = Just (x, Node lp z q)
+  where
+    (lp,q) = unconsSure y
+    unconsSure (Node x' Leaf Leaf) = (x', Leaf)
+    unconsSure (Node x' y' z') = (x', Node lp' z' q')
+      where
+        (lp',q') = unconsSure y'
+    unconsSure Leaf = errorWithoutStackTrace "Data.Braun.uncons: bug!"
+uncons Leaf = Nothing
+
+uncons' :: Tree a -> (a, Tree a)
+uncons' (Node x Leaf Leaf) = (x, Leaf)
+uncons' (Node x y z) = (x, Node lp z q)
+  where
+    (lp,q) = uncons' y
+uncons' Leaf = error "Data.Braun.uncons': empty tree"
