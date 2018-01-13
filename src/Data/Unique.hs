@@ -134,12 +134,12 @@ fixupList = go 1 where
   go !_ [] = []
   go !i [x] = case compare (Braun.size x) (szfn i) of
     LT | Braun.size x == 0 -> []
-    GT -> let (q,qs) = Braun.popBack x in [qs, Braun.Braun 1 (Node q Leaf Leaf)]
+    GT -> let (q,qs) = Braun.unsnoc' x in [qs, Braun.Braun 1 (Node q Leaf Leaf)]
     _ -> [x]
   go !i (x:y:ys) =
     case compare (Braun.size x) (szfn i) of
       EQ -> x : go (i+1) (y:ys)
       LT -> let (p,ps) = Braun.popFront y
             in Braun.pushBack p x : go (i+1) (ps:ys)
-      GT -> let (q,qs) = Braun.popBack x
+      GT -> let (q,qs) = Braun.unsnoc' x
             in qs : go (i+1) (Braun.pushFront q y:ys)

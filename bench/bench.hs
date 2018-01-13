@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Criterion.Main
-import Data.Braun
+import Data.Braun.Sized
 
 atSize :: Int -> Benchmark
 atSize n =
@@ -11,10 +11,10 @@ atSize n =
     \xs ->
          bgroup
              (show n)
-             [ bench "uncons, just element" $ nf (fmap fst . uncons) xs
-             , bench "uncons', just element" $ nf (fst . uncons') xs
-             , bench "uncons, both" $ nf uncons xs
-             , bench "uncons', both" $ nf uncons' xs ]
+             [ bench "unsnoc, just element" $ nf (fmap fst . unsnoc) xs
+             , bench "unsnoc', just element" $ nf (fst . unsnoc') xs
+             , bench "unsnoc, both" $ nf unsnoc xs
+             , bench "unsnoc', both" $ nf unsnoc' xs ]
 
 
 main =

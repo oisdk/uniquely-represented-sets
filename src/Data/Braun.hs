@@ -6,10 +6,16 @@ module Data.Braun where
 
 import           Data.Tree (Tree (..), zygoTree)
 import           GHC.Base  (build)
+import           Prelude hiding (tail)
 
 -- $setup
 -- >>> import Test.QuickCheck
 -- >>> import Data.List (unfoldr)
+-- >>> :{
+-- instance Arbitrary a => Arbitrary (Tree a) where
+--   arbitrary = fmap fromList arbitrary
+--   shrink = fmap fromList . shrink . toList
+-- :}
 
 -- |
 --
@@ -113,7 +119,15 @@ copy x = flip go (const id)
     | odd i = y ! j
     | otherwise = z ! j
     where j = (i-1) `div` 2
-(!) _ _ = errorWithoutStackTrace "Data.Braun.!: index out of range"
+(!) _ _ = error "Data.Braun.!: index out of range"
+
+(!?) :: Tree a -> Int -> Maybe a
+(!?) (Node x _ _) 0 = Just x
+(!?) (Node _ y z) i
+    | odd i = y !? j
+    | otherwise = z !? j
+    where j = (i-1) `div` 2
+(!?) _ _ = Nothing
 
 data UpperBound a = Exact a
                   | TooHigh Int
@@ -150,3 +164,24 @@ uncons' (Node x y z) = (x, Node lp z q)
   where
     (lp,q) = uncons' y
 uncons' Leaf = error "Data.Braun.uncons': empty tree"
+
+-- |
+--
+-- prop> uncons' (cons x xs) === (x,xs)
+cons :: a -> Tree a -> Tree a
+cons x Leaf = Node x Leaf Leaf
+cons x (Node y p q) = Node x (cons y q) p
+
+-- |
+--
+-- >>> tail Leaf
+-- Leaf
+--
+-- prop> tail (cons x xs) === xs
+-- prop> tail (cons undefined xs) === xs
+tail :: Tree a -> Tree a
+tail (Node _ Leaf Leaf) = Leaf
+tail (Node _ y z) = Node lp z q
+  where
+    (lp,q) = uncons' y
+tail Leaf = Leaf

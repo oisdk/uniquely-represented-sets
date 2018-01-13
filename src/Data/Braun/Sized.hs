@@ -4,17 +4,23 @@
 
 module Data.Braun.Sized where
 
-import           Data.Braun (UpperBound (..))
-import qualified Data.Braun as Unsized
-import           Data.Tree  (Tree (..))
+import           Data.Braun      (UpperBound (..))
+import qualified Data.Braun      as Unsized
+import           Data.Tree       (Tree (..))
+
+import           Control.DeepSeq (NFData (rnf))
 
 -- $setup
--- >>> import Data.List (sort, nub)
+-- >>> import Data.List (sort, nub, unfoldr)
+-- >>> import Test.QuickCheck
 
 data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
     , tree :: Tree a
     } deriving (Eq, Show, Functor)
+
+instance NFData a => NFData (Braun a) where
+    rnf (Braun _ tr) = rnf tr
 
 instance Foldable Braun where
     foldr f b (Braun _ xs) = Unsized.toListFB xs f b
@@ -140,17 +146,34 @@ popFront (Braun n p) = (x', Braun (n-1) np) where
 
 -- |
 --
--- prop> Unsized.isBraun (tree (snd (popBack (fromList (1:xs)))))
--- prop> fst (popBack (fromList (1:xs))) == last (1:xs)
-popBack :: Braun a -> (a, Braun a)
-popBack (Braun _ (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
-popBack (Braun n (Node x y z))
+-- unfoldr unsnoc (fromList xs) === reverse xs
+unsnoc :: Braun a -> Maybe (a, Braun a)
+unsnoc (Braun _ (Node x Leaf Leaf)) = Just (x, Braun 0 Leaf)
+unsnoc (Braun n (Node x y z))
   | odd n =
-      let (p,Braun _ q) = popBack (Braun m z)
-      in (p, Braun (n - 1) (Node x y q))
+      let Just (p,Braun _ q) = unsnoc (Braun m z)
+      in Just (p, Braun (n - 1) (Node x y q))
   | otherwise =
-      let (p,Braun _ q) = popBack (Braun m y)
-      in (p, Braun (n - 1) (Node x q z))
+      let Just (p,Braun _ q) = unsnoc (Braun m y)
+      in Just (p, Braun (n - 1) (Node x q z))
   where
     m = n `div` 2
-popBack x = error ("Data.Braun.Sized.popBack: bug!" ++ show (fmap (const ()) x))
+unsnoc (Braun _ Leaf) = Nothing
+
+-- |
+--
+-- prop> Unsized.isBraun (tree (snd (unsnoc' (fromList (1:xs)))))
+-- prop> fst (unsnoc' (fromList (1:xs))) == last (1:xs)
+unsnoc' :: Braun a -> (a, Braun a)
+unsnoc' (Braun _ Leaf) = error "Data.Braun.Sized.unsnoc': empty tree"
+unsnoc' (Braun s tr) = (lst,Braun (s-1) ntr) where
+  (lst,ntr) = go s tr
+  go !n (Node x Leaf Leaf) = (x, Leaf)
+  go !n (Node x y z)
+    | odd n = case go m z of
+        (p, q) -> (p, (Node x y q))
+    | otherwise = case go  m y of
+        (p, q) -> (p, (Node x q z))
+    where
+      m = n `div` 2
+  go !_ Leaf = errorWithoutStackTrace "Data.Braun.Sized.unsnoc': bug!"
