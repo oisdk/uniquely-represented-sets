@@ -126,6 +126,9 @@ instance Foldable Set where
     {-# INLINABLE toList #-}
     length (Set (Braun _ xs)) = foldl' (\a e -> a + Braun.size e) 0 xs
 
+instance Traversable Set where
+    traverse f (Set xs) = fmap Set ((traverse . traverse) f xs)
+
 -- | /O(n)/. Create a set from a list of ordered, distinct elements.
 --
 -- prop> fromDistinctAscList (toList xs) === xs
