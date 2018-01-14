@@ -8,6 +8,7 @@ import           Data.Tree.Binary      (Tree (..))
 import           Data.Tree.Braun.Sized (Braun (Braun))
 import qualified Data.Tree.Braun.Sized as Braun
 import           GHC.Base              (build)
+import           Data.List             (sortBy)
 
 -- $setup
 -- >>> import Test.QuickCheck
@@ -39,6 +40,19 @@ szfn i = max 1 (round (j * sqrt (logBase 2 j)))
 
 fromList :: Ord a => [a] -> Set a
 fromList xs = runB (Set.foldr consB nilB (Set.fromList xs))
+
+-- |
+--
+-- prop> fromListBy compare xs === fromList xs
+fromListBy :: (a -> a -> Ordering) -> [a] -> Set a
+fromListBy cmp xs = runB (foldr f (const nilB) (sortBy cmp xs) (const False))
+  where
+    f x a q
+      | q x = zs
+      | otherwise = consB x zs
+      where
+        zs = a ((EQ ==) . cmp x)
+
 
 consB :: a -> Builder a c d -> Builder a c d
 consB e a !k 1 !s p =

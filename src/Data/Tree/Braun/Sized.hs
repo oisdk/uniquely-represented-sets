@@ -47,6 +47,8 @@ import           GHC.Generics             (Generic, Generic1)
 
 import           Control.Applicative      hiding (empty)
 
+import           GHC.Stack
+
 -- | A Braun tree which keeps track of its size.
 data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
@@ -125,7 +127,8 @@ singleton :: a -> Braun a
 singleton x = Braun 1 (Node x Leaf Leaf)
 {-# INLINE singleton #-}
 
--- |
+-- | /O(n)/. Insert an element into the Braun tree, using the
+-- comparison function provided.
 --
 -- prop> foldr (insertBy compare) (Braun 0 Leaf) xs == fromList (sort (nub xs))
 insertBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
@@ -193,31 +196,47 @@ glb cmp x (Braun n ys@(Node h _ _)) =
         k = (i + j) `div` 2
         middle = ys Unsized.! k
 
--- | 
+-- | /O(n)/. Convert a Braun tree to a list.
+--
+-- prop> fromList (toList xs) === xs
 toList :: Braun a -> [a]
 toList (Braun _ xs) = Unsized.toList xs
 {-# INLINABLE toList #-}
 
--- |
+-- | /O(log n)/. Append an element to the beginning of the Braun tree.
 --
--- prop> uncons' (cons x xs) == (x,xs)
+-- prop> uncons' (cons x xs) === (x,xs)
 cons :: a -> Braun a -> Braun a
 cons x (Braun n xs) = Braun (n+1) (Unsized.cons x xs)
 
--- |
+-- | /O(log n)/. Returns the first element in the array and the rest
+-- the elements, if it is nonempty, or 'Nothing' if it is empty.
 --
--- prop> unfoldr uncons (fromList xs) == xs
+-- >>> uncons empty
+-- Nothing
+--
+-- prop> uncons (cons x xs) === Just (x,xs)
+-- prop> unfoldr uncons (fromList xs) === xs
 uncons :: Braun a -> Maybe (a, Braun a)
 uncons (Braun n tr) = (fmap.fmap) (Braun (n-1)) (Unsized.uncons tr)
 
-uncons' :: Braun a -> (a, Braun a)
+-- | /O(log n)/. Returns the first element in the array and the rest
+-- the elements, if it is nonempty, failing with an error if it is
+-- empty.
+--
+-- prop> uncons' (cons x xs) === (x,xs)
+uncons' :: HasCallStack => Braun a -> (a, Braun a)
 uncons' (Braun n tr) = fmap (Braun (n-1)) (Unsized.uncons' tr)
 
+-- | Use a comparison function to compare an element to the root
+-- element in a Braun tree, failing if the tree is empty.
 cmpRoot :: (a -> b -> Ordering) -> a -> Braun b -> Ordering
 cmpRoot cmp x (Braun _ (Node y _ _)) = cmp x y
 cmpRoot _ _ _ = error "Data.Tree.Braun.Sized.compRoot: empty tree"
 {-# INLINE cmpRoot #-}
 
+-- | Use a comparison function to see if an element is less than
+-- the root element in a Braun tree, failing if the tree is empty.
 ltRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
 ltRoot _ _ _                        = error "Data.Tree.Braun.Sized.ltRoot: empty tree"
@@ -247,9 +266,9 @@ unsnoc (Braun _ Leaf) = Nothing
 -- | /O(log n)/. Returns the last element in the list and the other
 -- elements, if present, or raises an error if the tree is empty.
 --
--- prop> isBraun (tree (snd (unsnoc' (fromList (1:xs)))))
+-- prop> isBraun (snd (unsnoc' (fromList (1:xs))))
 -- prop> fst (unsnoc' (fromList (1:xs))) == last (1:xs)
-unsnoc' :: Braun a -> (a, Braun a)
+unsnoc' :: HasCallStack => Braun a -> (a, Braun a)
 unsnoc' (Braun _ (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
 unsnoc' (Braun n (Node x y z))
   | odd n =
@@ -265,7 +284,6 @@ unsnoc' (Braun _ Leaf) = error "Data.Tree.Braun.Sized.unsnoc': empty tree"
 -- $setup
 -- >>> import Data.List (sort, nub, unfoldr)
 -- >>> import Test.QuickCheck
--- >>> import Data.Tree.Braun.Properties
 -- >>> import Data.Tree.Braun.Sized.Properties
 -- >>> :{
 -- instance Arbitrary a => Arbitrary (Braun a) where
