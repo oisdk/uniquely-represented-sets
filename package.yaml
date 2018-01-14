@@ -1,6 +1,6 @@
 name:                uniquely-represented-sets
 version:             0.1.0.0
-github:              "oisdk/Unique"
+github:              "oisdk/uniquely-represented-sets"
 license:             MIT
 author:              "Donnacha Oisín Kidney"
 maintainer:          "mail@doisinkidney.com"
@@ -9,7 +9,7 @@ copyright:           "2018 Donnacha Oisín Kidney"
 extra-source-files:
 - README.md
 
-description:         Please see the README on Github at <https://github.com/oisdk/Unique#readme>
+description:         Please see the README on Github at <https://github.com/oisdk/uniquely-represented-sets#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -21,7 +21,7 @@ library:
   - containers
 
 tests:
-  Unique-test:
+  uniquely-represented-sets-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -29,7 +29,7 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - Unique
+    - uniquely-represented-sets
     - QuickCheck
     - doctest
     - checkers
@@ -45,6 +45,6 @@ benchmarks:
     - -with-rtsopts=-N
     - -O2
     dependencies:
-    - Unique
+    - uniquely-represented-sets
     - criterion
     - random

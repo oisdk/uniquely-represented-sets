@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Criterion.Main
-import Data.Braun.Sized
+import Data.Tree.Braun.Sized
 
 atSize :: Int -> Benchmark
 atSize n =
