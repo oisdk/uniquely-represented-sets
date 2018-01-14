@@ -13,6 +13,8 @@ import           GHC.Base              (build)
 -- >>> import Test.QuickCheck
 -- >>> import Data.List (sort,nub)
 -- >>> import qualified Data.Tree.Braun as Unsized
+-- >>> import Data.Tree.Braun.Properties
+-- >>> import qualified Data.Tree.Braun.Sized.Properties as Braun
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
 -- >>> let safeInit xs = if null xs then [] else init xs
 -- >>> :{
@@ -80,8 +82,8 @@ instance Foldable Set where
 -- prop> length xs === size (fromAscList xs)
 -- prop> all Braun.validSize (tree (fromAscList xs))
 -- prop> Braun.validSize (tree (fromAscList xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromAscList xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromAscList xs))
+-- prop> isBraun (Braun.tree (tree (fromAscList xs)))
+-- prop> all (isBraun . Braun.tree) (tree (fromAscList xs))
 -- prop> validSizes (fromAscList xs)
 fromAscList :: [a] -> Set a
 fromAscList xs = runB (foldr consB nilB xs)
@@ -103,8 +105,8 @@ validSizes (Set _ b) = null xs || it && re where
 -- prop> length (nub xs) === size (fromList xs)
 -- prop> all Braun.validSize (tree (fromList xs))
 -- prop> Braun.validSize (tree (fromList xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromList xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromList xs))
+-- prop> isBraun (Braun.tree (tree (fromList xs)))
+-- prop> all (isBraun . Braun.tree) (tree (fromList xs))
 -- prop> validSizes (fromList xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
 -- prop> shuffleProp (\xs ys -> fromAscList (sort (nub xs)) === foldr insert empty ys)

@@ -2,23 +2,46 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes    #-}
 
-module Data.Tree.Braun.Sized where
+module Data.Tree.Braun.Sized
+  (-- * Braun type
+  Braun(..)
+  -- * Construction
+  , fromList
+  ,empty
+  ,singleton
+  -- ** Building
+  ,Builder
+  ,consB
+  ,nilB
+  ,runB
+  -- * Modification
+  -- ** At ends
+  ,snoc
+  ,unsnoc
+  ,unsnoc'
+  ,cons
+  ,uncons
+  ,uncons'
+  -- ** As set
+  ,insertBy
+  ,deleteBy
+  -- * Consuming
+  ,toList
+  -- * Querying
+  ,glb
+  ,cmpRoot
+  ,ltRoot
+  )
+  where
 
 import           Data.Tree.Binary (Tree (..))
 import           Data.Tree.Braun  (UpperBound (..))
 import qualified Data.Tree.Braun  as Unsized
+import           Data.Tree.Braun.Internal (zipLevels)
 
 import           Control.DeepSeq  (NFData (rnf))
 
--- $setup
--- >>> import Data.List (sort, nub, unfoldr)
--- >>> import Test.QuickCheck
--- >>> :{
--- instance Arbitrary a => Arbitrary (Braun a) where
---   arbitrary = fmap fromList arbitrary
---   shrink = fmap fromList . shrink . toList
--- :}
-
+-- | A Braun tree which keeps track of its size.
 data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
     , tree :: Tree a
@@ -28,10 +51,8 @@ instance NFData a => NFData (Braun a) where
     rnf (Braun _ tr) = rnf tr
 
 instance Foldable Braun where
-    foldr f b (Braun _ xs) = Unsized.toListFB xs f b
-
-validSize :: Braun a -> Bool
-validSize (Braun n xs) = n == length xs
+    foldr f b (Braun _ xs) = Unsized.foldrBraun xs f b
+    length = size
 
 snoc :: a -> Braun a -> Braun a
 snoc x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
@@ -45,8 +66,8 @@ snoc _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Braun.Sized.snoc: bug!"
 type Builder a b c = (Int -> Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> Int -> b) -> c)
 
 consB :: a -> Builder a b c -> Builder a b c
-consB e a !k 1  !s p = a (k*2) k (s+1) (\ys zs -> p (\_ _ -> []) (Unsized.runZip e ys zs (drop k zs)))
-consB e a !k !m !s p = a k (m-1) (s+1) (p . Unsized.runZip e)
+consB e a !k 1  !s p = a (k*2) k (s+1) (\ys zs -> p (\_ _ -> []) (zipLevels e ys zs (drop k zs)))
+consB e a !k !m !s p = a k (m-1) (s+1) (p . zipLevels e)
 {-# INLINE consB #-}
 
 nilB :: Builder a b b
@@ -67,6 +88,10 @@ fromList xs = runB (foldr consB nilB xs)
 empty :: Braun a
 empty = Braun 0 Leaf
 {-# INLINE empty #-}
+
+singleton :: a -> Braun a
+singleton x = Braun 1 (Node x Leaf Leaf)
+{-# INLINE singleton #-}
 
 -- |
 --
@@ -167,15 +192,6 @@ ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
 ltRoot _ _ _                        = error "Data.Braun.ltRoot: empty tree"
 {-# INLINE ltRoot #-}
 
-gtRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
-gtRoot cmp x (Braun _ (Node y _ _)) = cmp x y == GT
-gtRoot _ _ _                        = error "Data.Braun.gtRoot: empty tree"
-{-# INLINE gtRoot #-}
-
-lteRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
-lteRoot cmp x (Braun _ (Node y _ _)) = cmp x y /= GT
-lteRoot _ _ _                        = error "Data.Braun.ltRoot: empty tree"
-{-# INLINE lteRoot #-}
 -- |
 --
 -- prop> unfoldr unsnoc (fromList xs) === reverse xs
@@ -194,7 +210,7 @@ unsnoc (Braun _ Leaf) = Nothing
 
 -- |
 --
--- prop> Unsized.isBraun (tree (snd (unsnoc' (fromList (1:xs)))))
+-- prop> isBraun (tree (snd (unsnoc' (fromList (1:xs)))))
 -- prop> fst (unsnoc' (fromList (1:xs))) == last (1:xs)
 unsnoc' :: Braun a -> (a, Braun a)
 unsnoc' (Braun _ (Node x Leaf Leaf)) = (x, Braun 0 Leaf)
@@ -208,3 +224,14 @@ unsnoc' (Braun n (Node x y z))
   where
     m = n `div` 2
 unsnoc' (Braun _ Leaf) = error "Data.Braun.Sized.unsnoc': empty tree"
+
+-- $setup
+-- >>> import Data.List (sort, nub, unfoldr)
+-- >>> import Test.QuickCheck
+-- >>> import Data.Tree.Braun.Properties
+-- >>> import Data.Tree.Braun.Sized.Properties
+-- >>> :{
+-- instance Arbitrary a => Arbitrary (Braun a) where
+--   arbitrary = fmap fromList arbitrary
+--   shrink = fmap fromList . shrink . toList
+-- :}

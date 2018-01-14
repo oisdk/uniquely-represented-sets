@@ -1,13 +1,52 @@
 {-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes          #-}
 
-module Data.Tree.Braun where
+module Data.Tree.Braun
+  (
+   -- * Construction
+   fromList
+  ,replicate
+  ,singleton
+  ,empty
+   -- ** Building
+  ,Builder
+  ,consB
+  ,nilB
+  ,runB
+  ,
+   -- * Modification
+   cons
+  ,uncons
+  ,uncons'
+  ,tail
+  ,
+   -- * Consuming
+   foldrBraun
+  ,toList
+  ,
+   -- * Querying
+   (!)
+  ,(!?)
+  ,size
+  ,UpperBound(..)
+  ,ub)
+  where
 
-import           Data.Tree.Binary (Tree (..), zygoTree)
+import           Data.Tree.Binary (Tree (..))
+import qualified Data.Tree.Binary as Binary
 import           GHC.Base  (build)
-import           Prelude hiding (tail)
+import           Prelude hiding (tail, replicate)
+import           Data.Tree.Braun.Internal (zipLevels)
+import           GHC.Stack
 
+-- | A Braun tree with one element.
+singleton :: a -> Tree a
+singleton = Binary.singleton
+{-# INLINE singleton #-}
+
+-- | A Braun tree with no elements.
+empty :: Tree a
+empty = Leaf
+{-# INLINE empty #-}
 
 -- | /O(n)/. Create a Braun tree (in order) from a list. The algorithm
 -- is similar to that in:
@@ -21,39 +60,52 @@ import           Prelude hiding (tail)
 --
 -- Inlined sufficiently, the implementation is:
 --
--- prop> toList (fromList xs) == (xs :: [Int])
+-- @
+-- fromList :: [a] -> 'Tree' a
+-- fromList xs = 'foldr' f b xs 1 1 ('const' 'head') where
+--   f e a !k 1  p = a (k'*'2) k     (\ys zs -> p n (g e ys zs ('drop' k zs)))
+--   f e a !k !m p = a k     (m'-'1) (p . g e)
+--
+--   g x a (y:ys) (z:zs) = 'Node' x y    z    : a ys zs
+--   g x a []     (z:zs) = 'Node' x 'Leaf' z    : a [] zs
+--   g x a (y:ys) []     = 'Node' x y    'Leaf' : a ys []
+--   g x a []     []     = 'Node' x 'Leaf' 'Leaf' : a [] []
+--   {-\# NOINLINE g #-}
+--
+--   n _ _ = []
+--   b _ _ p = p n [Leaf]
+-- {-\# INLINABLE fromList #-}
+-- @
+--
+-- prop> toList (fromList xs) == xs
 fromList :: [a] -> Tree a
 fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
 
-type Builder a b c = (Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> b) -> c)
+-- | A type suitable for building a Braun tree by repeated applications
+-- of 'consB'.
+type Builder a b = (Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> b) -> b)
 
-consB :: a -> Builder a b c -> Builder a b c
-consB e a !k 1 p  = a (k*2) k (\ys zs -> p (\_ _ -> []) (runZip e ys zs (drop k zs)))
-consB e a !k !m p = a k (m-1) (p . runZip e)
+-- | /O(1)/. Push an element to the front of a 'Builder'.
+consB :: a -> Builder a b -> Builder a b
+consB e a !k 1 p  = a (k*2) k (\ys zs -> p (\_ _ -> []) (zipLevels e ys zs (drop k zs)))
+consB e a !k !m p = a k (m-1) (p . zipLevels e)
 {-# INLINE consB #-}
 
-nilB :: Builder a b b
+-- | An empty 'Builder'.
+nilB :: Builder a b
 nilB _ _ p = p (\_ _ -> []) [Leaf]
 {-# INLINE nilB #-}
 
-runB :: Builder a (Tree a) (Tree a) -> Tree a
+-- | Convert a 'Builder' to a Braun tree.
+runB :: Builder a (Tree a) -> Tree a
 runB b = b 1 1 (const head)
 {-# INLINE runB #-}
 
-runZip :: a
-       -> ([Tree a] -> [Tree a] -> [Tree a])
-       -> [Tree a]
-       -> [Tree a]
-       -> [Tree a]
-runZip x a (y:ys) (z:zs) = Node x y    z    : a ys zs
-runZip x a [] (z:zs)     = Node x Leaf z    : a [] zs
-runZip x a (y:ys) []     = Node x y    Leaf : a ys []
-runZip x a [] []         = Node x Leaf Leaf : a [] []
-{-# NOINLINE runZip #-}
 
-toListFB :: Tree a -> (a -> b -> b) -> b -> b
-toListFB tr c n =
+-- | Perform a right fold, in Braun order, over a tree.
+foldrBraun :: Tree a -> (a -> b -> b) -> b -> b
+foldrBraun tr c n =
     case tr of
         Leaf -> n
         _ -> tol [tr]
@@ -72,16 +124,16 @@ toListFB tr c n =
                       errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
                   root (Node x _ _) = x
                   root _ = errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
-{-# INLINE toListFB #-}
+{-# INLINE foldrBraun #-}
 
-
+-- | /O(n)/. Convert a Braun tree to a list.
+--
+-- prop> fromList (toList xs) === xs
 toList :: Tree a -> [a]
-toList tr = build (toListFB tr)
+toList tr = build (foldrBraun tr)
 {-# INLINABLE toList #-}
 
--- |
---
--- prop> size (fromList xs) == length xs
+-- | /O(log^2 n)/. Calculate the size of a Braun tree.
 size :: Tree a -> Int
 size Leaf = 0
 size (Node _ l r) = 1 + 2 * m + diff l m where
@@ -93,30 +145,23 @@ size (Node _ l r) = 1 + 2 * m + diff l m where
       | otherwise = diff t ((k `div` 2) - 1)
   diff Leaf _ = errorWithoutStackTrace "Data.Tree.Braun.size: bug!"
 
--- |
+-- | /O(log^2 n)/. @'replicate' n x@ creates a Braun tree from @n@
+-- copies of @x@.
 --
--- prop> isBraun (fromList xs)
-isBraun :: Tree a -> Bool
-isBraun = zygoTree (0 :: Int) (\_ l r -> 1 + l + r) True alg
-  where
-    alg _ lsize lbrn rsize rbrn =
-        lbrn && rbrn && (lsize == rsize || lsize - 1 == rsize)
-
--- |
---
--- prop> size (copy () (getNonNegative n)) == getNonNegative n
-copy :: a -> Int -> Tree a
-copy x = flip go (const id)
+-- prop> \(NonNegative n) -> size (replicate n ()) == n
+replicate :: Int -> a -> Tree a
+replicate m x = go m (const id)
   where
     go 0 k = k (Node x Leaf Leaf) Leaf
     go n k
       | odd n = go (pred n `div` 2) $ \s t -> k (Node x s t) (Node x t t)
       | otherwise = go (pred n `div` 2) $ \s t -> k (Node x s s) (Node x s t)
 
--- |
+-- | Retrieve the element at the specified position, raising an
+-- error if it's not present.
 --
 -- prop> \(NonNegative n) xs -> n < length xs ==> fromList xs ! n == xs !! n
-(!) :: Tree a -> Int -> a
+(!) :: HasCallStack => Tree a -> Int -> a
 (!) (Node x _ _) 0 = x
 (!) (Node _ y z) i
     | odd i = y ! j
@@ -124,6 +169,8 @@ copy x = flip go (const id)
     where j = (i-1) `div` 2
 (!) _ _ = error "Data.Tree.Braun.!: index out of range"
 
+-- | Retrieve the element at the specified position, or 'Nothing'
+-- the index is out of range.
 (!?) :: Tree a -> Int -> Maybe a
 (!?) (Node x _ _) 0 = Just x
 (!?) (Node _ y z) i
@@ -132,10 +179,11 @@ copy x = flip go (const id)
     where j = (i-1) `div` 2
 (!?) _ _ = Nothing
 
+-- | Result of an upper bound operation.
 data UpperBound a = Exact a
                   | TooHigh Int
                   | Finite
-
+-- | Find the upper bound for a given element.
 ub :: (a -> b -> Ordering) -> a -> Tree b -> UpperBound b
 ub f x t = go f x t 0 1
   where
@@ -146,9 +194,14 @@ ub f x t = go f x t 0 1
         EQ -> Exact hd
         GT -> go f x ev (n+2*k) (2*k)
 
--- |
+-- | /O(log n)/. Returns the first element in the array and the rest
+-- the elements, if it is nonempty, or 'Nothing' if it is empty.
 --
--- prop> unfoldr uncons (fromList xs) == xs
+-- >>> uncons empty
+-- Nothing
+--
+-- prop> uncons (cons x xs) === Just (x,xs)
+-- prop> unfoldr uncons (fromList xs) === xs
 uncons :: Tree a -> Maybe (a, Tree a)
 uncons (Node x Leaf Leaf) = Just (x, Leaf)
 uncons (Node x y z) = Just (x, Node lp z q)
@@ -156,23 +209,29 @@ uncons (Node x y z) = Just (x, Node lp z q)
     Just (lp,q) = uncons y
 uncons Leaf = Nothing
 
-uncons' :: Tree a -> (a, Tree a)
+-- | /O(log n)/. Returns the first element in the array and the rest
+-- the elements, if it is nonempty, failing with an error if it is
+-- empty.
+--
+-- prop> uncons' (cons x xs) === (x,xs)
+uncons' :: HasCallStack => Tree a -> (a, Tree a)
 uncons' (Node x Leaf Leaf) = (x, Leaf)
 uncons' (Node x y z) = (x, Node lp z q)
   where
     (lp,q) = uncons' y
 uncons' Leaf = error "Data.Tree.Braun.uncons': empty tree"
 
--- |
+-- | /O(log n)/. Append an element to the beginning of the Braun tree.
 --
 -- prop> uncons' (cons x xs) === (x,xs)
 cons :: a -> Tree a -> Tree a
 cons x Leaf = Node x Leaf Leaf
 cons x (Node y p q) = Node x (cons y q) p
 
--- |
+-- | /O(log n)/. Get all elements except the first from the Braun
+-- tree. Returns an empty tree when called on an empty tree.
 --
--- >>> tail Leaf
+-- >>> tail empty
 -- Leaf
 --
 -- prop> tail (cons x xs) === xs

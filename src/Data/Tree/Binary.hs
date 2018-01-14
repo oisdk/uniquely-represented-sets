@@ -7,30 +7,41 @@
 
 -- | A simple, generic binary tree and some operations.
 module Data.Tree.Binary
-  (Tree(..)
-  ,foldTree
-  ,unfoldTree
-  ,replicateTree
+  (
+   -- * The tree type
+   Tree(..)
+  ,
+   -- * Construction
+   unfoldTree
+  ,replicate
   ,replicateA
+  ,singleton
+  ,empty
   ,fromList
+  ,
+   -- * Consumption
+   foldTree
   ,zygoTree
-  ,drawBinaryTree
-  ,singleton)
+  ,
+   -- * Display
+   drawBinaryTree)
   where
 
-import           Control.DeepSeq      (NFData (..))
-import           Data.Data            (Data)
+import           Control.DeepSeq       (NFData (..))
+import           Data.Data             (Data)
 import           Data.Functor.Classes
 import           Data.Monoid
-import           Data.Typeable        (Typeable)
-import           GHC.Generics         (Generic, Generic1)
+import           Data.Typeable         (Typeable)
+import           GHC.Generics          (Generic, Generic1)
 
-import           Control.Applicative
+import           Control.Applicative   hiding (empty)
 import           Data.Functor.Identity
+import           Data.List             (uncons)
+import           Data.Maybe            (fromMaybe)
 import           Text.Read
 import           Text.Read.Lex
-import           Data.List (uncons)
-import           Data.Maybe (fromMaybe)
+
+import           Prelude               hiding (replicate)
 
 -- | A simple binary tree.
 data Tree a
@@ -41,9 +52,15 @@ data Tree a
     deriving (Show,Read,Eq,Ord,Functor,Foldable,Traversable,Typeable
              ,Generic,Generic1,Data)
 
+-- | A binary tree with one element.
 singleton :: a -> Tree a
 singleton x = Node x Leaf Leaf
 {-# INLINE singleton #-}
+
+-- | A binary tree with no elements.
+empty :: Tree a
+empty = Leaf
+{-# INLINE empty #-}
 
 instance NFData a =>
          NFData (Tree a) where
@@ -63,9 +80,6 @@ instance Ord1 Tree where
     liftCompare _ Leaf _ = LT
     liftCompare _ _ Leaf = GT
 
--- |
---
--- prop> show (xs :: Tree Int) === liftShowsPrec showsPrec showList 0 xs ""
 instance Show1 Tree where
     liftShowsPrec s _ = go where
       go _ Leaf = showString "Leaf"
@@ -157,15 +171,15 @@ unfoldTree :: (b -> Maybe (a, b, b)) -> b -> Tree a
 unfoldTree f = go where
   go = maybe Leaf (\(x,l,r) -> Node x (go l) (go r)) . f
 
--- | @'replicateTree' n a@ creates a tree of size @n@ filled @a@.
--- >>> putStr (drawBinaryTree (replicateTree 4 ()))
+-- | @'replicate' n a@ creates a tree of size @n@ filled @a@.
+-- >>> putStr (drawBinaryTree (replicate 4 ()))
 --     ()
 --   ()  ()
 -- ()
 --
--- prop> \(NonNegative n) -> length (replicateTree n ()) === n
-replicateTree :: Int -> a -> Tree a
-replicateTree n x = runIdentity (replicateA n (Identity x))
+-- prop> \(NonNegative n) -> length (replicate n ()) === n
+replicate :: Int -> a -> Tree a
+replicate n x = runIdentity (replicateA n (Identity x))
 
 -- | @'replicateA' n a@ replicates the action @a@ @n@ times, trying
 -- to balance the result as much as possible. The actions are executed
@@ -206,6 +220,8 @@ instance Monoid (Tree a) where
     mempty = Leaf
 
 -- | Construct a tree from a list, in an preorder fashion.
+--
+-- prop> toList (fromList xs) === xs
 fromList :: [a] -> Tree a
 fromList xs = evalState (replicateA n u) xs
   where
@@ -236,8 +252,8 @@ zipLongest :: a -> b -> (a -> b -> c) -> [a] -> [b] -> [c]
 zipLongest ldef rdef fn = go
   where
     go (x:xs) (y:ys) = fn x y : go xs ys
-    go [] ys = map (fn ldef) ys
-    go xs [] = map (`fn` rdef) xs
+    go [] ys         = map (fn ldef) ys
+    go xs []         = map (`fn` rdef) xs
 
 newtype State s a = State
     { runState :: s -> (a, s)
