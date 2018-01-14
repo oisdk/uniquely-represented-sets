@@ -65,13 +65,13 @@ toListFB tr c n =
                       l : foldr leftChildren (k []) ts
                   children (Node _ l r:ts) k = l : children ts (k . (:) r)
                   children _ _ =
-                      errorWithoutStackTrace "Data.Braun.toList: bug!"
+                      errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
                   leftChildren (Node _ Leaf _) _ = []
                   leftChildren (Node _ l _) a = l : a
                   leftChildren _ _ =
-                      errorWithoutStackTrace "Data.Braun.toList: bug!"
+                      errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
                   root (Node x _ _) = x
-                  root _ = errorWithoutStackTrace "Data.Braun.toList: bug!"
+                  root _ = errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
 {-# INLINE toListFB #-}
 
 
@@ -91,7 +91,7 @@ size (Node _ l r) = 1 + 2 * m + diff l m where
   diff (Node _ s t) k
       | odd k = diff s (k `div` 2)
       | otherwise = diff t ((k `div` 2) - 1)
-  diff Leaf _ = errorWithoutStackTrace "Data.Braun.size: bug!"
+  diff Leaf _ = errorWithoutStackTrace "Data.Tree.Braun.size: bug!"
 
 -- |
 --
@@ -122,7 +122,7 @@ copy x = flip go (const id)
     | odd i = y ! j
     | otherwise = z ! j
     where j = (i-1) `div` 2
-(!) _ _ = error "Data.Braun.!: index out of range"
+(!) _ _ = error "Data.Tree.Braun.!: index out of range"
 
 (!?) :: Tree a -> Int -> Maybe a
 (!?) (Node x _ _) 0 = Just x
@@ -161,7 +161,7 @@ uncons' (Node x Leaf Leaf) = (x, Leaf)
 uncons' (Node x y z) = (x, Node lp z q)
   where
     (lp,q) = uncons' y
-uncons' Leaf = error "Data.Braun.uncons': empty tree"
+uncons' Leaf = error "Data.Tree.Braun.uncons': empty tree"
 
 -- |
 --
