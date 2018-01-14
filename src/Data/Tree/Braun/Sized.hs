@@ -68,6 +68,9 @@ instance Traversable Braun where
         b = pure Unsized.nilB
         k = Braun n . Unsized.runB
 
+-- | /O(log n)/. Append an item to the end of a Braun tree.
+--
+-- prop> x `snoc` fromList xs === fromList (xs ++ [x])
 snoc :: a -> Braun a -> Braun a
 snoc x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
 snoc x (Braun n (Node y z w))
@@ -75,20 +78,25 @@ snoc x (Braun n (Node y z w))
   | otherwise = Braun (n + 1) (Node y (tree (snoc x (Braun m z))) w)
   where
     m = n `div` 2
-snoc _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Braun.Sized.snoc: bug!"
+snoc _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Tree.Braun.Sized.snoc: bug!"
 
-type Builder a b c = (Int -> Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> Int -> b) -> c)
+-- | A type suitable for building a Braun tree by repeated applications
+-- of 'consB'.
+type Builder a b = (Int -> Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> Int -> b) -> b)
 
-consB :: a -> Builder a b c -> Builder a b c
+-- | /O(1)/. Push an element to the front of a 'Builder'.
+consB :: a -> Builder a b -> Builder a b
 consB e a !k 1  !s p = a (k*2) k (s+1) (\ys zs -> p (\_ _ -> []) (zipLevels e ys zs (drop k zs)))
 consB e a !k !m !s p = a k (m-1) (s+1) (p . zipLevels e)
 {-# INLINE consB #-}
 
-nilB :: Builder a b b
+-- | An empty 'Builder'.
+nilB :: Builder a b
 nilB _ _ s p = p (\_ _ -> []) [Leaf] s
 {-# INLINE nilB #-}
 
-runB :: Builder a (Braun a) (Braun a) -> Braun a
+-- | Convert a 'Builder' to a Braun tree.
+runB :: Builder a (Braun a) -> Braun a
 runB xs = xs 1 1 0 (const (flip Braun . head))
 {-# INLINE runB #-}
 
@@ -107,10 +115,12 @@ fromList :: [a] -> Braun a
 fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
 
+-- | A Braun tree with no elements.
 empty :: Braun a
 empty = Braun 0 Leaf
 {-# INLINE empty #-}
 
+-- | A Braun tree with one element.
 singleton :: a -> Braun a
 singleton x = Braun 1 (Node x Leaf Leaf)
 {-# INLINE singleton #-}
@@ -183,7 +193,7 @@ glb cmp x (Braun n ys@(Node h _ _)) =
         k = (i + j) `div` 2
         middle = ys Unsized.! k
 
-
+-- | 
 toList :: Braun a -> [a]
 toList (Braun _ xs) = Unsized.toList xs
 {-# INLINABLE toList #-}
@@ -203,19 +213,23 @@ uncons (Braun n tr) = (fmap.fmap) (Braun (n-1)) (Unsized.uncons tr)
 uncons' :: Braun a -> (a, Braun a)
 uncons' (Braun n tr) = fmap (Braun (n-1)) (Unsized.uncons' tr)
 
-
 cmpRoot :: (a -> b -> Ordering) -> a -> Braun b -> Ordering
 cmpRoot cmp x (Braun _ (Node y _ _)) = cmp x y
-cmpRoot _ _ _ = error "Data.Braun.Sized.compRoot: empty tree"
+cmpRoot _ _ _ = error "Data.Tree.Braun.Sized.compRoot: empty tree"
 {-# INLINE cmpRoot #-}
 
 ltRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
-ltRoot _ _ _                        = error "Data.Braun.ltRoot: empty tree"
+ltRoot _ _ _                        = error "Data.Tree.Braun.Sized.ltRoot: empty tree"
 {-# INLINE ltRoot #-}
 
--- |
+-- | /O(log n)/. Returns the last element in the list and the other
+-- elements, if present, or 'Nothing' if the tree is empty.
 --
+-- >>> unsnoc empty
+-- Nothing
+--
+-- prop> unsnoc (snoc x xs) === Just (x, xs)
 -- prop> unfoldr unsnoc (fromList xs) === reverse xs
 unsnoc :: Braun a -> Maybe (a, Braun a)
 unsnoc (Braun _ (Node x Leaf Leaf)) = Just (x, Braun 0 Leaf)
@@ -230,7 +244,8 @@ unsnoc (Braun n (Node x y z))
     m = n `div` 2
 unsnoc (Braun _ Leaf) = Nothing
 
--- |
+-- | /O(log n)/. Returns the last element in the list and the other
+-- elements, if present, or raises an error if the tree is empty.
 --
 -- prop> isBraun (tree (snd (unsnoc' (fromList (1:xs)))))
 -- prop> fst (unsnoc' (fromList (1:xs))) == last (1:xs)
@@ -245,7 +260,7 @@ unsnoc' (Braun n (Node x y z))
       in (p, Braun (n - 1) (Node x q z))
   where
     m = n `div` 2
-unsnoc' (Braun _ Leaf) = error "Data.Braun.Sized.unsnoc': empty tree"
+unsnoc' (Braun _ Leaf) = error "Data.Tree.Braun.Sized.unsnoc': empty tree"
 
 -- $setup
 -- >>> import Data.List (sort, nub, unfoldr)

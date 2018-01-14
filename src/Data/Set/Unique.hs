@@ -30,7 +30,7 @@ data Set a = Set
     , tree :: Braun (Braun a)
     } deriving (Eq,Show)
 
-type Builder a b c d e = Int -> Int -> Int -> (Braun.Builder a (Braun a) (Braun a) -> Braun.Builder (Braun a) d e -> Int -> b) -> c
+type Builder a b c = Int -> Int -> Int -> (Braun.Builder a (Braun a) -> Braun.Builder (Braun a) b -> Int -> c) -> c
 
 szfn :: Int -> Int
 szfn i = max 1 (round (j * sqrt (logBase 2 j)))
@@ -40,7 +40,7 @@ szfn i = max 1 (round (j * sqrt (logBase 2 j)))
 fromList :: Ord a => [a] -> Set a
 fromList xs = runB (Set.foldr consB nilB (Set.fromList xs))
 
-consB :: a -> Builder a b c d e -> Builder a b c d e
+consB :: a -> Builder a c d -> Builder a c d
 consB e a !k 1 !s p =
     a
         (k + 1)
@@ -51,11 +51,11 @@ consB e a !k 1 !s p =
 consB e a !k !i !s p = a k (i - 1) (s + 1) (p . Braun.consB e)
 {-# INLINE consB #-}
 
-nilB :: Builder a b b c c
+nilB :: Builder a b c
 nilB _ _ s p = p Braun.nilB Braun.nilB s
 {-# INLINE nilB #-}
 
-runB :: Builder a (Set a) (Set a) (Braun (Braun a)) (Braun (Braun a)) -> Set a
+runB :: Builder a (Braun (Braun a)) (Set a)-> Set a
 runB xs = xs 1 1 0 (\_ r s -> Set s (Braun.runB r))
 {-# INLINE runB #-}
 
