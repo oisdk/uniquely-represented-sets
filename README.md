@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/oisdk/Unique.svg?token=fXdGpZwjFQ87pr9zynKX&branch=master)](https://travis-ci.com/oisdk/Unique)
+[![Build Status](https://travis-ci.org/oisdk/uniquely-represented-sets.svg)](https://travis-ci.org/oisdk/uniquely-represented-sets)
 
 # Unique
 
