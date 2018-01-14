@@ -84,7 +84,7 @@ validSetOpsProp xs x s =
         [ validUnique s
         , counterexample "after insert" $ validUnique (Unique.insert x s)
         , counterexample "after delete" $ validUnique (Unique.delete x s)
-        , counterexample "after fromAscList" $ validUnique (Unique.fromAscList xs)
+        , counterexample "after fromAscList" $ validUnique (Unique.fromDistinctAscList xs)
         ]
 
 validOpsProp :: Show a => a -> Sized.Braun a -> Property

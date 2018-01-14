@@ -1,4 +1,7 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveGeneric      #-}
 
 -- | This module provides a uniquely-represented Set type.
 module Data.Set.Unique
@@ -11,7 +14,7 @@ module Data.Set.Unique
   ,fromListBy
   ,empty
   ,singleton
-  ,fromAscList
+  ,fromDistinctAscList
   ,
    -- ** Building
    Builder
@@ -34,6 +37,8 @@ module Data.Set.Unique
   where
 
 
+import           Control.DeepSeq       (NFData (rnf))
+import           Data.Data             (Data)
 import           Data.Foldable
 import           Data.List             (sortBy)
 import           Data.Maybe            (isJust)
@@ -41,22 +46,18 @@ import qualified Data.Set              as Set
 import           Data.Tree.Binary      (Tree (..))
 import           Data.Tree.Braun.Sized (Braun (Braun))
 import qualified Data.Tree.Braun.Sized as Braun
+import           Data.Typeable         (Typeable)
 import           GHC.Base              (build)
-
--- $setup
--- >>> import Test.QuickCheck
--- >>> :{
--- instance (Arbitrary a, Ord a) =>
---          Arbitrary (Set a) where
---     arbitrary = fmap fromList arbitrary
---     shrink = fmap fromList . shrink . toList
--- :}
+import           GHC.Generics          (Generic, Generic1)
 
 -- | A uniquely-represented set.
 data Set a = Set
     { size :: {-# UNPACK #-} !Int
     , tree :: Braun (Braun a)
-    } deriving (Eq,Show)
+    } deriving (Show,Read,Eq,Ord,Functor,Typeable,Generic,Generic1,Data)
+
+instance NFData a => NFData (Set a) where
+    rnf (Set _ xs) = rnf xs
 
 -- | A type suitable for building a 'Set' by repeated applications
 -- of 'consB'.
@@ -120,7 +121,7 @@ singleton x = Set 1 (Braun 1 (Node (Braun 1 (Node x Leaf Leaf)) Leaf Leaf))
 
 -- | 'toList' is /O(n)/.
 --
--- prop> toList (fromAscList xs) === xs
+-- prop> toList (fromDistinctAscList xs) === xs
 instance Foldable Set where
     foldr f b (Set _ xs) = foldr (flip (foldr f)) b xs
     toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
@@ -129,10 +130,10 @@ instance Foldable Set where
 
 -- | /O(n)/. Create a set from a list of ordered, distinct elements.
 --
--- prop> fromAscList (toList xs) === xs
-fromAscList :: [a] -> Set a
-fromAscList xs = runB (foldr consB nilB xs)
-{-# INLINABLE fromAscList #-}
+-- prop> fromDistinctAscList (toList xs) === xs
+fromDistinctAscList :: [a] -> Set a
+fromDistinctAscList xs = runB (foldr consB nilB xs)
+{-# INLINABLE fromDistinctAscList #-}
 
 -- | /sqrt(n log n)/. Insert an element into the set.
 --
@@ -217,3 +218,12 @@ breakThree p (x:xs)
           | p' z = ([],y,zs)
           | otherwise = let (xs',x',ys') = go p' z zs' in (y:xs',x',ys')
       go _ y [] = ([],y,[])
+
+-- $setup
+-- >>> import Test.QuickCheck
+-- >>> :{
+-- instance (Arbitrary a, Ord a) =>
+--          Arbitrary (Set a) where
+--     arbitrary = fmap fromList arbitrary
+--     shrink = fmap fromList . shrink . toList
+-- :}
