@@ -33,14 +33,14 @@ instance Foldable Braun where
 validSize :: Braun a -> Bool
 validSize (Braun n xs) = n == length xs
 
-pushBack :: a -> Braun a -> Braun a
-pushBack x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
-pushBack x (Braun n (Node y z w))
-  | even n = Braun (n + 1) (Node y z (tree (pushBack x (Braun (m - 1) w))))
-  | otherwise = Braun (n + 1) (Node y (tree (pushBack x (Braun m z))) w)
+snoc :: a -> Braun a -> Braun a
+snoc x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
+snoc x (Braun n (Node y z w))
+  | even n = Braun (n + 1) (Node y z (tree (snoc x (Braun (m - 1) w))))
+  | otherwise = Braun (n + 1) (Node y (tree (snoc x (Braun m z))) w)
   where
     m = n `div` 2
-pushBack _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Braun.Sized.pushBack: bug!"
+snoc _ (Braun _ Leaf) = errorWithoutStackTrace "Data.Braun.Sized.snoc: bug!"
 
 type Builder a b c = (Int -> Int -> Int -> (([Tree a] -> [Tree a] -> [Tree a]) -> [Tree a] -> Int -> b) -> c)
 
@@ -76,7 +76,7 @@ insertBy cmp x b@(Braun s xs) =
              (\y ->
                    cmp x y /= GT)
              (Unsized.toList xs) of
-        (_,[]) -> pushBack x b
+        (_,[]) -> snoc x b
         (lt,gte@(y:_)) ->
             if cmp x y == EQ
                 then b
@@ -90,6 +90,10 @@ insertBy cmp x b@(Braun s xs) =
                                         (foldr Unsized.consB Unsized.nilB gte))
                                    lt))
 
+-- |
+--
+-- prop> deleteBy compare x (fromList (nub (x : xs))) === fromList [ y | y <- nub xs, y /= x ]
+-- prop> validSize (deleteBy compare x xs)
 deleteBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
 deleteBy cmp x b@(Braun s xs) =
     case break
@@ -152,16 +156,25 @@ uncons' :: Braun a -> (a, Braun a)
 uncons' (Braun n tr) = fmap (Braun (n-1)) (Unsized.uncons' tr)
 
 
-compRoot :: (a -> b -> Ordering) -> a -> Braun b -> Ordering
-compRoot cmp x (Braun _ (Node y _ _)) = cmp x y
-compRoot _ _ _ = error "Data.Braun.Sized.compRoot: empty tree"
-{-# INLINE compRoot #-}
+cmpRoot :: (a -> b -> Ordering) -> a -> Braun b -> Ordering
+cmpRoot cmp x (Braun _ (Node y _ _)) = cmp x y
+cmpRoot _ _ _ = error "Data.Braun.Sized.compRoot: empty tree"
+{-# INLINE cmpRoot #-}
 
 ltRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
 ltRoot _ _ _ = error "Data.Braun.ltRoot: empty tree"
 {-# INLINE ltRoot #-}
 
+gtRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
+gtRoot cmp x (Braun _ (Node y _ _)) = cmp x y == GT
+gtRoot _ _ _ = error "Data.Braun.gtRoot: empty tree"
+{-# INLINE gtRoot #-}
+
+lteRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
+lteRoot cmp x (Braun _ (Node y _ _)) = cmp x y /= GT
+lteRoot _ _ _ = error "Data.Braun.ltRoot: empty tree"
+{-# INLINE lteRoot #-}
 -- |
 --
 -- prop> unfoldr unsnoc (fromList xs) === reverse xs

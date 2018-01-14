@@ -1,24 +1,25 @@
-{-# LANGUAGE BangPatterns   #-}
-{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Data.Unique where
 
 import           Data.Braun.Sized (Braun (Braun))
 import qualified Data.Braun.Sized as Braun
+import           Data.Maybe       (isJust)
 import           Data.Tree        (Tree (..))
 import           GHC.Base         (build)
+
 -- $setup
 -- >>> import Test.QuickCheck
 -- >>> import Data.List (sort,nub)
 -- >>> import qualified Data.Braun as Unsized
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
 -- >>> let safeInit xs = if null xs then [] else init xs
--- >>> let fromListIns xs = foldr insert empty (xs :: [Int])
+-- >>> let fromAscListIns xs = foldr insert empty (xs :: [Int])
 
 data Set a = Set
     { size :: {-# UNPACK #-} !Int
     , tree :: Braun (Braun a)
-    } deriving (Eq,Show,Foldable)
+    } deriving (Eq,Show)
 
 type Builder a b c d e = Int -> Int -> Int -> (Braun.Builder a (Braun a) (Braun a) -> Braun.Builder (Braun a) d e -> Int -> b) -> c
 
@@ -56,23 +57,25 @@ singleton x = Set 1 (Braun 1 (Node (Braun 1 (Node x Leaf Leaf)) Leaf Leaf))
 
 -- |
 --
--- prop> toList (fromList xs) === xs
+-- prop> toList (fromAscList xs) === xs
 toList :: Set a -> [a]
 toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
 {-# INLINABLE toList #-}
 
+instance Foldable Set where
+    foldr f b xs = foldr f b (toList xs)
 
 -- |
 --
--- prop> length xs === size (fromList xs)
--- prop> all Braun.validSize (tree (fromList xs))
--- prop> Braun.validSize (tree (fromList xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromList xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromList xs))
--- prop> validSizes (fromList xs)
-fromList :: [a] -> Set a
-fromList xs = runB (foldr consB nilB xs)
-{-# INLINABLE fromList #-}
+-- prop> length xs === size (fromAscList xs)
+-- prop> all Braun.validSize (tree (fromAscList xs))
+-- prop> Braun.validSize (tree (fromAscList xs))
+-- prop> Unsized.isBraun (Braun.tree (tree (fromAscList xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (tree (fromAscList xs))
+-- prop> validSizes (fromAscList xs)
+fromAscList :: [a] -> Set a
+fromAscList xs = runB (foldr consB nilB xs)
+{-# INLINABLE fromAscList #-}
 
 validSizes :: Set a -> Bool
 validSizes (Set _ b) = null xs || it && re where
@@ -87,41 +90,61 @@ validSizes (Set _ b) = null xs || it && re where
 -- >>> toList (foldr insert empty [3,1,2,5,4,3,6])
 -- [1,2,3,4,5,6]
 --
--- prop> length (nub xs) === size (fromListIns xs)
--- prop> all Braun.validSize (tree (fromListIns xs))
--- prop> Braun.validSize (tree (fromListIns xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromListIns xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromListIns xs))
--- prop> validSizes (fromListIns xs)
+-- prop> length (nub xs) === size (fromAscListIns xs)
+-- prop> all Braun.validSize (tree (fromAscListIns xs))
+-- prop> Braun.validSize (tree (fromAscListIns xs))
+-- prop> Unsized.isBraun (Braun.tree (tree (fromAscListIns xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (tree (fromAscListIns xs))
+-- prop> validSizes (fromAscListIns xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
--- prop> shuffleProp (\xs ys -> fromList (sort (nub xs)) === foldr insert empty ys)
+-- prop> shuffleProp (\xs ys -> fromAscList (sort (nub xs)) === foldr insert empty ys)
 insert :: Ord a => a -> Set a -> Set a
 insert = insertBy compare
 
 insertBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
-insertBy _ x (Set 0 _) = singleton x
-insertBy cmp x (Set _ xs) =
-    let final ps =
-            let qs = fixupList ps
-                m = sum $ map Braun.size qs
-            in Set m (Braun.fromList qs)
-        ys = Braun.toList xs
-    in 
-       case breakThree (Braun.ltRoot cmp x) (Braun.toList xs) of
-           Nothing -> case ys of (y:yys) -> final (Braun.cons x y : yys)
-           Just (lt,eq,gt) -> final (lt ++ [Braun.insertBy cmp x eq] ++ gt)
+insertBy cmp x pr@(Set n xs) =
+    case ys of
+        [] -> singleton x
+        (y:yys) ->
+            case breakThree (Braun.ltRoot cmp x) ys of
+                Nothing ->
+                    Set (n + 1) (Braun.fromList (fixupList (Braun.cons x y : yys)))
+                Just (lt,eq,gt)
+                  | Braun.size eq == Braun.size new -> pr
+                  | otherwise ->
+                      Set (n + 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
+                    where new = Braun.insertBy cmp x eq
+  where
+    ys = Braun.toList xs
+
+-- |
+--
+--  prop> delete x (fromAscListIns (nub (x:xs))) === fromAscListIns [ y | y <- nub xs, x /= y ]
+delete :: Ord a => a -> Set a -> Set a
+delete = deleteBy compare
 
 deleteBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
-deleteBy _ _ (Set 0 _) = empty
-deleteBy cmp x (Set _ xs) =
-  let (lte,gt) = break (Braun.ltRoot cmp x) $ Braun.toList xs
-      final ps = let qs = fixupList ps
-                     m = sum $ map Braun.size qs
-                 in Set m (Braun.fromList qs)
-  in final $
-     case reverse lte of
-       []          -> gt
-       (eq:rev_lt) -> reverse rev_lt ++ [Braun.deleteBy cmp x eq] ++ gt
+deleteBy cmp x pr@(Set n xs) =
+    case breakThree (Braun.ltRoot cmp x) (Braun.toList xs) of
+        Nothing -> pr
+        Just (lt,eq,gt)
+          | Braun.size eq == Braun.size new -> pr
+          | otherwise -> Set (n - 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
+            where new = Braun.deleteBy cmp x eq
+
+lookupBy :: (a -> a -> Ordering) -> a -> Set a -> Maybe a
+lookupBy cmp x (Set _ xs) = do
+    ys <- Braun.glb (Braun.cmpRoot cmp) x xs
+    y <- Braun.glb cmp x ys
+    case cmp x y of
+      EQ -> pure y
+      _ -> Nothing
+
+-- |
+--
+-- prop> member x (fromAscListIns xs) === any (x==) xs
+member :: Ord a => a -> Set a -> Bool
+member x xs = isJust (lookupBy compare x xs)
 
 
 fixupList :: [Braun a] -> [Braun a]
@@ -135,7 +158,7 @@ fixupList = go 1 where
     case compare (Braun.size x) (szfn i) of
       EQ -> x : go (i+1) (y:ys)
       LT -> let (p,ps) = Braun.uncons' y
-            in Braun.pushBack p x : go (i+1) (ps:ys)
+            in Braun.snoc p x : go (i+1) (ps:ys)
       GT -> let (q,qs) = Braun.unsnoc' x
             in qs : go (i+1) (Braun.cons q y:ys)
 
