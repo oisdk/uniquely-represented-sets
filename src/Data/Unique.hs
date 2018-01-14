@@ -4,7 +4,7 @@
 module Data.Unique where
 
 import qualified Data.Braun       as Unsized
-import           Data.Braun.Sized (Braun (..))
+import           Data.Braun.Sized (Braun (Braun))
 import qualified Data.Braun.Sized as Braun
 import           Data.Tree        (Tree (..))
 import           GHC.Base         (build)
@@ -66,14 +66,14 @@ toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
 -- prop> length xs === sizeS (fromList xs)
 -- prop> all Braun.validSize (unSet (fromList xs))
 -- prop> Braun.validSize (unSet (fromList xs))
--- prop> Unsized.isBraun (tree (unSet (fromList xs)))
--- prop> all (Unsized.isBraun . tree) (unSet (fromList xs))
+-- prop> Unsized.isBraun (Braun.tree (unSet (fromList xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (unSet (fromList xs))
 -- prop> validSizes (fromList xs)
 fromList :: [a] -> Set a
 fromList xs = runB (foldr consB nilB xs)
 
 comp :: Ord a => a -> Braun a -> Ordering
-comp y b = let (h,_) = Braun.popFront b
+comp y b = let (h,_) = Braun.uncons' b
            in compare y h
 
 ltc :: Ord a => a -> Braun a -> Bool
@@ -82,12 +82,10 @@ ltc x y = comp x y == LT
 validSizes :: Set a -> Bool
 validSizes (Set _ b) = null xs || it && re where
   xs = Braun.toList b
-  it = and $ zipWith (\x y -> size x == szfn y) (safeInit xs) [1..]
+  it = and $ zipWith (\x y -> Braun.size x == szfn y) (safeInit xs) [1..]
   safeInit [] = []
   safeInit ys = init ys
-  re = size (last xs) <= szfn (length xs)
-
-
+  re = Braun.size (last xs) <= szfn (length xs)
 
 -- |
 --
@@ -97,8 +95,8 @@ validSizes (Set _ b) = null xs || it && re where
 -- prop> length (nub xs) === sizeS (fromListIns xs)
 -- prop> all Braun.validSize (unSet (fromListIns xs))
 -- prop> Braun.validSize (unSet (fromListIns xs))
--- prop> Unsized.isBraun (tree (unSet (fromListIns xs)))
--- prop> all (Unsized.isBraun . tree) (unSet (fromListIns xs))
+-- prop> Unsized.isBraun (Braun.tree (unSet (fromListIns xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (unSet (fromListIns xs))
 -- prop> validSizes (fromListIns xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
 -- prop> shuffleProp (\xs ys -> fromList (sort (nub xs)) === foldr insert empty ys)
@@ -112,9 +110,10 @@ insert x (Set _ xs) =
             in Set m (Braun.fromList qs)
     in final $
        case (reverse lte, gt) of
-           ([],gt1:gts) -> Braun.pushFront x gt1 : gts
+           ([],gt1:gts) -> Braun.cons x gt1 : gts
            (eq:rev_lt,_) ->
                reverse rev_lt ++ [Braun.insert compare x eq] ++ gt
+           _ -> errorWithoutStackTrace "Data.Unique.insert: bug!"
 
 delete :: Ord a => a -> Set a -> Set a
 delete _ (Set 0 _) = empty
@@ -139,7 +138,7 @@ fixupList = go 1 where
   go !i (x:y:ys) =
     case compare (Braun.size x) (szfn i) of
       EQ -> x : go (i+1) (y:ys)
-      LT -> let (p,ps) = Braun.popFront y
+      LT -> let (p,ps) = Braun.uncons' y
             in Braun.pushBack p x : go (i+1) (ps:ys)
       GT -> let (q,qs) = Braun.unsnoc' x
-            in qs : go (i+1) (Braun.pushFront q y:ys)
+            in qs : go (i+1) (Braun.cons q y:ys)

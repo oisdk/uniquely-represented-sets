@@ -150,12 +150,7 @@ uncons :: Tree a -> Maybe (a, Tree a)
 uncons (Node x Leaf Leaf) = Just (x, Leaf)
 uncons (Node x y z) = Just (x, Node lp z q)
   where
-    (lp,q) = unconsSure y
-    unconsSure (Node x' Leaf Leaf) = (x', Leaf)
-    unconsSure (Node x' y' z') = (x', Node lp' z' q')
-      where
-        (lp',q') = unconsSure y'
-    unconsSure Leaf = errorWithoutStackTrace "Data.Braun.uncons: bug!"
+    Just (lp,q) = uncons y
 uncons Leaf = Nothing
 
 uncons' :: Tree a -> (a, Tree a)
