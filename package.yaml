@@ -33,6 +33,7 @@ tests:
     - QuickCheck
     - doctest
     - checkers
+    - containers
 
 benchmarks:
   bench:

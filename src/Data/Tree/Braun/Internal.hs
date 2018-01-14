@@ -1,3 +1,4 @@
+-- | Internal functions, subject to change.
 module Data.Tree.Braun.Internal where
 
 import Data.Tree.Binary (Tree(..))

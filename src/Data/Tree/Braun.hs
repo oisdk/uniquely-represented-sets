@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns        #-}
 
+-- | This module provides functions for manipulating and using Braun
+-- trees.
 module Data.Tree.Braun
   (
    -- * Construction
@@ -183,6 +185,7 @@ replicate m x = go m (const id)
 data UpperBound a = Exact a
                   | TooHigh Int
                   | Finite
+
 -- | Find the upper bound for a given element.
 ub :: (a -> b -> Ordering) -> a -> Tree b -> UpperBound b
 ub f x t = go f x t 0 1

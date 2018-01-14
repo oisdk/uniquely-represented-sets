@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0c07dcde91c3b2ddbd4158dab5e1758f2ca38f1ba19911e1262a00e9c291489c
+-- hash: 21f090ae562e23d508444722d22a0905ffe708ba63d0c24d2f13f99c12e4db44
 
 name:           Unique
 version:        0.1.0.0
@@ -33,6 +33,7 @@ library
     , deepseq
   exposed-modules:
       Data.Set.Unique
+      Data.Set.Unique.Properties
       Data.Tree.Binary
       Data.Tree.Braun
       Data.Tree.Braun.Internal
@@ -54,6 +55,7 @@ test-suite Unique-test
     , Unique
     , base >=4.7 && <5
     , checkers
+    , containers
     , doctest
   other-modules:
       Paths_Unique

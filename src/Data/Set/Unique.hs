@@ -1,47 +1,80 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Data.Set.Unique where
+-- | This module provides a uniquely-represented Set type.
+module Data.Set.Unique
+  (
+   -- * Set type
+   Set(..)
+  ,
+   -- * Construction
+   fromList
+  ,fromListBy
+  ,empty
+  ,singleton
+  ,fromAscList
+  ,
+   -- ** Building
+   Builder
+  ,consB
+  ,nilB
+  ,runB
+  ,
+   -- * Modification
+   insert
+  ,insertBy
+  ,delete
+  ,deleteBy
+  ,
+   -- * Querying
+   lookupBy
+  ,member
+  ,
+   -- * Size invariant
+   szfn)
+  where
 
+
+import           Data.Foldable
+import           Data.List             (sortBy)
 import           Data.Maybe            (isJust)
 import qualified Data.Set              as Set
 import           Data.Tree.Binary      (Tree (..))
 import           Data.Tree.Braun.Sized (Braun (Braun))
 import qualified Data.Tree.Braun.Sized as Braun
 import           GHC.Base              (build)
-import           Data.List             (sortBy)
 
 -- $setup
 -- >>> import Test.QuickCheck
--- >>> import Data.List (sort,nub)
--- >>> import qualified Data.Tree.Braun as Unsized
--- >>> import Data.Tree.Braun.Properties
--- >>> import qualified Data.Tree.Braun.Sized.Properties as Braun
--- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
--- >>> let safeInit xs = if null xs then [] else init xs
 -- >>> :{
--- memberProp = do
---   xs <- arbitrary :: Gen [Int]
---   x <- arbitrary :: Gen Int
---   ys <- shuffle (x:xs)
---   pure (member x (fromList ys) && not (member x (fromList (filter (x/=) ys))))
+-- instance (Arbitrary a, Ord a) =>
+--          Arbitrary (Set a) where
+--     arbitrary = fmap fromList arbitrary
+--     shrink = fmap fromList . shrink . toList
 -- :}
 
+-- | A uniquely-represented set.
 data Set a = Set
     { size :: {-# UNPACK #-} !Int
     , tree :: Braun (Braun a)
     } deriving (Eq,Show)
 
+-- | A type suitable for building a 'Set' by repeated applications
+-- of 'consB'.
 type Builder a b c = Int -> Int -> Int -> (Braun.Builder a (Braun a) -> Braun.Builder (Braun a) b -> Int -> c) -> c
 
+-- | The size invariant. The nth Braun tree in the set has size
+-- szfn n.
 szfn :: Int -> Int
 szfn i = max 1 (round (j * sqrt (logBase 2 j)))
   where
     !j = toEnum i :: Double
 
+-- | /O(n log n)/. Create a set from a list.
 fromList :: Ord a => [a] -> Set a
 fromList xs = runB (Set.foldr consB nilB (Set.fromList xs))
 
--- |
+-- | /O(n log n)/. Create a set from a list, using the supplied
+-- ordering function.
 --
 -- prop> fromListBy compare xs === fromList xs
 fromListBy :: (a -> a -> Ordering) -> [a] -> Set a
@@ -53,7 +86,7 @@ fromListBy cmp xs = runB (foldr f (const nilB) (sortBy cmp xs) (const False))
       where
         zs = a ((EQ ==) . cmp x)
 
-
+-- | /O(1)/. Push an element to the front of a 'Builder'.
 consB :: a -> Builder a c d -> Builder a c d
 consB e a !k 1 !s p =
     a
@@ -65,68 +98,53 @@ consB e a !k 1 !s p =
 consB e a !k !i !s p = a k (i - 1) (s + 1) (p . Braun.consB e)
 {-# INLINE consB #-}
 
+-- | An empty 'Builder'.
 nilB :: Builder a b c
 nilB _ _ s p = p Braun.nilB Braun.nilB s
 {-# INLINE nilB #-}
 
+-- | Convert a 'Builder' to a 'Set'.
 runB :: Builder a (Braun (Braun a)) (Set a)-> Set a
 runB xs = xs 1 1 0 (\_ r s -> Set s (Braun.runB r))
 {-# INLINE runB #-}
 
+-- | The empty set.
 empty :: Set a
 empty = Set 0 (Braun 0 Leaf)
 {-# INLINE empty #-}
 
+-- | Create a set with one element.
 singleton :: a -> Set a
 singleton x = Set 1 (Braun 1 (Node (Braun 1 (Node x Leaf Leaf)) Leaf Leaf))
 {-# INLINE singleton #-}
 
--- |
+-- | 'toList' is /O(n)/.
 --
 -- prop> toList (fromAscList xs) === xs
-toList :: Set a -> [a]
-toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
-{-# INLINABLE toList #-}
-
 instance Foldable Set where
-    foldr f b xs = foldr f b (toList xs)
+    foldr f b (Set _ xs) = foldr (flip (foldr f)) b xs
+    toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
+    {-# INLINABLE toList #-}
+    length (Set n _) = n
 
--- |
+-- | /O(n)/. Create a set from a list of ordered, distinct elements.
 --
--- prop> length xs === size (fromAscList xs)
--- prop> all Braun.validSize (tree (fromAscList xs))
--- prop> Braun.validSize (tree (fromAscList xs))
--- prop> isBraun (Braun.tree (tree (fromAscList xs)))
--- prop> all (isBraun . Braun.tree) (tree (fromAscList xs))
--- prop> validSizes (fromAscList xs)
+-- prop> fromAscList (toList xs) === xs
 fromAscList :: [a] -> Set a
 fromAscList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromAscList #-}
 
-validSizes :: Set a -> Bool
-validSizes (Set _ b) = null xs || it && re where
-  xs = Braun.toList b
-  it = and $ zipWith (\x y -> Braun.size x == szfn y) (safeInit xs) [1..]
-  safeInit [] = []
-  safeInit ys = init ys
-  re = Braun.size (last xs) <= szfn (length xs)
-
--- |
+-- | /sqrt(n log n)/. Insert an element into the set.
 --
 -- >>> toList (foldr insert empty [3,1,2,5,4,3,6])
 -- [1,2,3,4,5,6]
---
--- prop> length (nub xs) === size (fromList xs)
--- prop> all Braun.validSize (tree (fromList xs))
--- prop> Braun.validSize (tree (fromList xs))
--- prop> isBraun (Braun.tree (tree (fromList xs)))
--- prop> all (isBraun . Braun.tree) (tree (fromList xs))
--- prop> validSizes (fromList xs)
--- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
--- prop> shuffleProp (\xs ys -> fromAscList (sort (nub xs)) === foldr insert empty ys)
 insert :: Ord a => a -> Set a -> Set a
 insert = insertBy compare
 
+-- | /sqrt(n log n)/. Insert an element into the set, using the
+-- supplied ordering function.
+--
+-- prop> insert x xs === insertBy compare x xs
 insertBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
 insertBy cmp x pr@(Set n xs) =
     case ys of
@@ -141,23 +159,27 @@ insertBy cmp x pr@(Set n xs) =
                       Set (n + 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
                     where new = Braun.insertBy cmp x eq
   where
-    ys = Braun.toList xs
+    ys = toList xs
 
--- |
---
---  prop> delete x (fromList (nub (x:xs))) === fromList [ y | y <- nub xs, x /= y ]
+-- | /sqrt(n log n)/. Delete an element from the set.
 delete :: Ord a => a -> Set a -> Set a
 delete = deleteBy compare
 
+-- | /sqrt(n log n)/. Delete an element from the set, using the
+-- supplied ordering function.
+--
+-- prop> delete x xs === deleteBy compare x xs
 deleteBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
 deleteBy cmp x pr@(Set n xs) =
-    case breakThree (Braun.ltRoot cmp x) (Braun.toList xs) of
+    case breakThree (Braun.ltRoot cmp x) (toList xs) of
         Nothing -> pr
         Just (lt,eq,gt)
           | Braun.size eq == Braun.size new -> pr
           | otherwise -> Set (n - 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
             where new = Braun.deleteBy cmp x eq
 
+-- | /O(log^2 n)/. Lookup an element according to the supplied
+-- ordering function in the set.
 lookupBy :: (a -> a -> Ordering) -> a -> Set a -> Maybe a
 lookupBy cmp x (Set _ xs) = do
     ys <- Braun.glb (Braun.cmpRoot cmp) x xs
@@ -166,15 +188,9 @@ lookupBy cmp x (Set _ xs) = do
       EQ -> pure y
       _  -> Nothing
 
--- |
---
--- prop> member x (fromList xs) === any (x==) xs
---
---
--- prop> memberProp
+-- | /O(log^2 n)/. Find if an element is a member of the set.
 member :: Ord a => a -> Set a -> Bool
 member x xs = isJust (lookupBy compare x xs)
-
 
 fixupList :: [Braun a] -> [Braun a]
 fixupList = go 1 where
@@ -190,15 +206,6 @@ fixupList = go 1 where
             in Braun.snoc p x : go (i+1) (ps:ys)
       GT -> let (q,qs) = Braun.unsnoc' x
             in qs : go (i+1) (Braun.cons q y:ys)
-
-unsnocList :: [a] -> Maybe (a, [a])
-unsnocList [] = Nothing
-unsnocList (x:xs) = Just (unsnocList' x xs)
-  where
-    unsnocList' y [] = (y, [])
-    unsnocList' y (z:zs) = (e, y : ys)
-      where
-        (e,ys) = unsnocList' z zs
 
 breakThree :: (a -> Bool) -> [a] -> Maybe ([a], a, [a])
 breakThree _ [] = Nothing

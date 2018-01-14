@@ -3,6 +3,8 @@
 {-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric      #-}
 
+-- | This module provides a Braun tree which keeps track of its size,
+-- and associated functions.
 module Data.Tree.Braun.Sized
   (-- * Braun type
   Braun(..)
@@ -26,8 +28,6 @@ module Data.Tree.Braun.Sized
   -- ** As set
   ,insertBy
   ,deleteBy
-  -- * Consuming
-  ,toList
   -- * Querying
   ,glb
   ,cmpRoot
@@ -48,6 +48,7 @@ import           GHC.Generics             (Generic, Generic1)
 import           Control.Applicative      hiding (empty)
 
 import           GHC.Stack
+import           Data.Foldable
 
 -- | A Braun tree which keeps track of its size.
 data Braun a = Braun
@@ -59,9 +60,14 @@ data Braun a = Braun
 instance NFData a => NFData (Braun a) where
     rnf (Braun _ tr) = rnf tr
 
+-- | 'toList' is /O(n)/.
+--
+-- prop> fromList (toList xs) === xs
 instance Foldable Braun where
     foldr f b (Braun _ xs) = Unsized.foldrBraun xs f b
     length = size
+    toList (Braun _ xs) = Unsized.toList xs
+    {-# INLINABLE toList #-}
 
 instance Traversable Braun where
     traverse f (Braun n tr) = fmap k (Unsized.foldrBraun tr c b)
@@ -129,8 +135,6 @@ singleton x = Braun 1 (Node x Leaf Leaf)
 
 -- | /O(n)/. Insert an element into the Braun tree, using the
 -- comparison function provided.
---
--- prop> foldr (insertBy compare) (Braun 0 Leaf) xs == fromList (sort (nub xs))
 insertBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
 insertBy cmp x b@(Braun s xs) =
     case break
@@ -151,10 +155,8 @@ insertBy cmp x b@(Braun s xs) =
                                         (foldr Unsized.consB Unsized.nilB gte))
                                    lt))
 
--- |
---
--- prop> deleteBy compare x (fromList (nub (x : xs))) === fromList [ y | y <- nub xs, y /= x ]
--- prop> validSize (deleteBy compare x xs)
+-- | /O(n)/. Delete an element from the Braun tree, using the
+-- comparison function provided.
 deleteBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
 deleteBy cmp x b@(Braun s xs) =
     case break
@@ -168,6 +170,7 @@ deleteBy cmp x b@(Braun s xs) =
                          (s - 1)
                               (Unsized.runB (foldr Unsized.consB (foldr Unsized.consB Unsized.nilB gt) lt))
 
+-- | /O(log^2 n)/. Find the greatest lower bound for an element.
 glb :: (a -> b -> Ordering) -> a -> Braun b -> Maybe b
 glb _ _ (Braun _ Leaf) = Nothing
 glb cmp x (Braun n ys@(Node h _ _)) =
@@ -196,12 +199,6 @@ glb cmp x (Braun n ys@(Node h _ _)) =
         k = (i + j) `div` 2
         middle = ys Unsized.! k
 
--- | /O(n)/. Convert a Braun tree to a list.
---
--- prop> fromList (toList xs) === xs
-toList :: Braun a -> [a]
-toList (Braun _ xs) = Unsized.toList xs
-{-# INLINABLE toList #-}
 
 -- | /O(log n)/. Append an element to the beginning of the Braun tree.
 --

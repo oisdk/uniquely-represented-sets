@@ -1,3 +1,4 @@
+-- | This module provides functions to test invariants of Braun trees.
 module Data.Tree.Braun.Properties where
 
 import Data.Tree.Binary
