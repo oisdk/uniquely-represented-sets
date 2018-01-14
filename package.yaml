@@ -18,6 +18,7 @@ library:
   source-dirs: src
   dependencies:
   - deepseq
+  - containers
 
 tests:
   Unique-test:

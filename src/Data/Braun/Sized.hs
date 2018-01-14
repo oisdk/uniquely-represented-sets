@@ -66,6 +66,7 @@ fromList xs = runB (foldr consB nilB xs)
 
 empty :: Braun a
 empty = Braun 0 Leaf
+{-# INLINE empty #-}
 
 -- |
 --

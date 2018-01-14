@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4d38fc4c5e4d2687d8da84a00da3e626ea78519831fd2aa935ab0b9d850f0ebd
+-- hash: 9163beb344b459b1e1859c0d8ceede4228e6b3a608b46489ef81a3ad9660b4e7
 
 name:           Unique
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , containers
     , deepseq
   exposed-modules:
       Data.Braun

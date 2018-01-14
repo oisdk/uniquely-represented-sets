@@ -7,6 +7,7 @@ import qualified Data.Braun.Sized as Braun
 import           Data.Maybe       (isJust)
 import           Data.Tree        (Tree (..))
 import           GHC.Base         (build)
+import qualified Data.Set         as Set
 
 -- $setup
 -- >>> import Test.QuickCheck
@@ -14,7 +15,13 @@ import           GHC.Base         (build)
 -- >>> import qualified Data.Braun as Unsized
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
 -- >>> let safeInit xs = if null xs then [] else init xs
--- >>> let fromListIns xs = foldr insert empty (xs :: [Int])
+-- >>> :{
+-- memberProp = do
+--   xs <- arbitrary :: Gen [Int]
+--   x <- arbitrary :: Gen Int
+--   ys <- shuffle (x:xs)
+--   pure (member x (fromList ys) && not (member x (fromList (filter (x/=) ys))))
+-- :}
 
 data Set a = Set
     { size :: {-# UNPACK #-} !Int
@@ -27,6 +34,9 @@ szfn :: Int -> Int
 szfn i = max 1 (round (j * sqrt (logBase 2 j)))
   where
     !j = toEnum i :: Double
+
+fromList :: Ord a => [a] -> Set a
+fromList xs = runB (Set.foldr consB nilB (Set.fromList xs))
 
 consB :: a -> Builder a b c d e -> Builder a b c d e
 consB e a !k 1 !s p =
@@ -90,12 +100,12 @@ validSizes (Set _ b) = null xs || it && re where
 -- >>> toList (foldr insert empty [3,1,2,5,4,3,6])
 -- [1,2,3,4,5,6]
 --
--- prop> length (nub xs) === size (fromListIns xs)
--- prop> all Braun.validSize (tree (fromListIns xs))
--- prop> Braun.validSize (tree (fromListIns xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromListIns xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromListIns xs))
--- prop> validSizes (fromListIns xs)
+-- prop> length (nub xs) === size (fromList xs)
+-- prop> all Braun.validSize (tree (fromList xs))
+-- prop> Braun.validSize (tree (fromList xs))
+-- prop> Unsized.isBraun (Braun.tree (tree (fromList xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (tree (fromList xs))
+-- prop> validSizes (fromList xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
 -- prop> shuffleProp (\xs ys -> fromAscList (sort (nub xs)) === foldr insert empty ys)
 insert :: Ord a => a -> Set a -> Set a
@@ -119,7 +129,7 @@ insertBy cmp x pr@(Set n xs) =
 
 -- |
 --
---  prop> delete x (fromListIns (nub (x:xs))) === fromListIns [ y | y <- nub xs, x /= y ]
+--  prop> delete x (fromList (nub (x:xs))) === fromList [ y | y <- nub xs, x /= y ]
 delete :: Ord a => a -> Set a -> Set a
 delete = deleteBy compare
 
@@ -142,7 +152,10 @@ lookupBy cmp x (Set _ xs) = do
 
 -- |
 --
--- prop> member x (fromListIns xs) === any (x==) xs
+-- prop> member x (fromList xs) === any (x==) xs
+--
+--
+-- prop> memberProp
 member :: Ord a => a -> Set a -> Bool
 member x xs = isJust (lookupBy compare x xs)
 
