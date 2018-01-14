@@ -51,7 +51,7 @@ import           GHC.Base              (build)
 import           GHC.Generics          (Generic, Generic1)
 
 -- | A uniquely-represented set.
-data Set a = Set
+newtype Set a = Set
     { tree :: Braun (Braun a)
     } deriving (Show,Read,Eq,Ord,Functor,Typeable,Generic,Generic1,Data)
 
