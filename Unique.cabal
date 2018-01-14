@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9163beb344b459b1e1859c0d8ceede4228e6b3a608b46489ef81a3ad9660b4e7
+-- hash: 9a6ca75cf01e51b52b5e54c0f9d30bba3b22de5d1c13cacc9473c5ed1a1e5015
 
 name:           Unique
 version:        0.1.0.0
@@ -32,10 +32,10 @@ library
     , containers
     , deepseq
   exposed-modules:
-      Data.Braun
-      Data.Braun.Sized
-      Data.Tree
-      Data.Unique
+      Data.Set.Unique
+      Data.Tree.Binary
+      Data.Tree.Braun
+      Data.Tree.Braun.Sized
   other-modules:
       Paths_Unique
   default-language: Haskell2010

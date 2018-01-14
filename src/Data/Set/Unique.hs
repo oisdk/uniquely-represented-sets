@@ -1,18 +1,18 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Data.Unique where
+module Data.Set.Unique where
 
-import           Data.Braun.Sized (Braun (Braun))
-import qualified Data.Braun.Sized as Braun
-import           Data.Maybe       (isJust)
-import           Data.Tree        (Tree (..))
-import           GHC.Base         (build)
-import qualified Data.Set         as Set
+import           Data.Maybe            (isJust)
+import qualified Data.Set              as Set
+import           Data.Tree.Binary      (Tree (..))
+import           Data.Tree.Braun.Sized (Braun (Braun))
+import qualified Data.Tree.Braun.Sized as Braun
+import           GHC.Base              (build)
 
 -- $setup
 -- >>> import Test.QuickCheck
 -- >>> import Data.List (sort,nub)
--- >>> import qualified Data.Braun as Unsized
+-- >>> import qualified Data.Tree.Braun as Unsized
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
 -- >>> let safeInit xs = if null xs then [] else init xs
 -- >>> :{
@@ -148,7 +148,7 @@ lookupBy cmp x (Set _ xs) = do
     y <- Braun.glb cmp x ys
     case cmp x y of
       EQ -> pure y
-      _ -> Nothing
+      _  -> Nothing
 
 -- |
 --

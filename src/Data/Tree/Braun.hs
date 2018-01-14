@@ -2,9 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes          #-}
 
-module Data.Braun where
+module Data.Tree.Braun where
 
-import           Data.Tree (Tree (..), zygoTree)
+import           Data.Tree.Binary (Tree (..), zygoTree)
 import           GHC.Base  (build)
 import           Prelude hiding (tail)
 

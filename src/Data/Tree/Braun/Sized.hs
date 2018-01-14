@@ -2,13 +2,13 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes    #-}
 
-module Data.Braun.Sized where
+module Data.Tree.Braun.Sized where
 
-import           Data.Braun      (UpperBound (..))
-import qualified Data.Braun      as Unsized
-import           Data.Tree       (Tree (..))
+import           Data.Tree.Binary (Tree (..))
+import           Data.Tree.Braun  (UpperBound (..))
+import qualified Data.Tree.Braun  as Unsized
 
-import           Control.DeepSeq (NFData (rnf))
+import           Control.DeepSeq  (NFData (rnf))
 
 -- $setup
 -- >>> import Data.List (sort, nub, unfoldr)
@@ -164,17 +164,17 @@ cmpRoot _ _ _ = error "Data.Braun.Sized.compRoot: empty tree"
 
 ltRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
-ltRoot _ _ _ = error "Data.Braun.ltRoot: empty tree"
+ltRoot _ _ _                        = error "Data.Braun.ltRoot: empty tree"
 {-# INLINE ltRoot #-}
 
 gtRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 gtRoot cmp x (Braun _ (Node y _ _)) = cmp x y == GT
-gtRoot _ _ _ = error "Data.Braun.gtRoot: empty tree"
+gtRoot _ _ _                        = error "Data.Braun.gtRoot: empty tree"
 {-# INLINE gtRoot #-}
 
 lteRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
 lteRoot cmp x (Braun _ (Node y _ _)) = cmp x y /= GT
-lteRoot _ _ _ = error "Data.Braun.ltRoot: empty tree"
+lteRoot _ _ _                        = error "Data.Braun.ltRoot: empty tree"
 {-# INLINE lteRoot #-}
 -- |
 --

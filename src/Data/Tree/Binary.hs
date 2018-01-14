@@ -6,7 +6,7 @@
 {-# LANGUAGE Safe               #-}
 
 -- | A simple, generic binary tree and some operations.
-module Data.Tree
+module Data.Tree.Binary
   (Tree(..)
   ,foldTree
   ,unfoldTree
@@ -27,8 +27,10 @@ import           GHC.Generics         (Generic, Generic1)
 import           Data.Bifunctor
 import           Data.Bool
 import           Data.Function
-
+import           Control.Applicative
 import           Data.Functor.Identity
+import           Text.Read
+import           Text.Read.Lex
 
 -- $setup
 -- >>> import Test.QuickCheck
@@ -73,24 +75,16 @@ instance Show1 Tree where
         . go 11 r
 
 instance Read1 Tree where
-    liftReadsPrec r _ = go
+    liftReadPrec rp _ = go
       where
-        go d ss =
-            readParen
-                (d > 11)
-                (\xs ->
-                      [ (Leaf, ys)
-                      | ("Leaf",ys) <- lex xs ])
-                ss ++
-            readParen
-                (d > 10)
-                (\vs ->
-                      [ (Node x lx rx, zs)
-                      | ("Node",ws) <- lex vs
-                      , (x,xs) <- r 11 ws
-                      , (lx,ys) <- go 11 xs
-                      , (rx,zs) <- go 11 ys ])
-                ss
+        go =
+            parens $
+            prec 10 (Leaf <$ expect' (Ident "Leaf")) +++
+            prec
+                10
+                (expect' (Ident "Node") *>
+                 liftA3 Node (step rp) (step go) (step go))
+        expect' = lift . expect
 
 -- | Fold over a tree.
 foldTree :: b -> (a -> b -> b -> b) -> Tree a -> b
@@ -163,7 +157,7 @@ unfoldTree f = go where
 --   ()  ()
 -- ()
 --
--- prop> length (replicateTree (getNonNegative n) ()) === getNonNegative n
+-- prop> \(NonNegative n) -> length (replicateTree n ()) === n
 replicateTree :: Int -> a -> Tree a
 replicateTree n x = runIdentity (replicateA n (Identity x))
 
