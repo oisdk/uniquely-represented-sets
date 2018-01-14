@@ -69,9 +69,9 @@ empty = Braun 0 Leaf
 
 -- |
 --
--- prop> foldr (insert compare) (Braun 0 Leaf) xs == fromList (sort (nub xs))
-insert :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
-insert cmp x b@(Braun s xs) =
+-- prop> foldr (insertBy compare) (Braun 0 Leaf) xs == fromList (sort (nub xs))
+insertBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
+insertBy cmp x b@(Braun s xs) =
     case break
              (\y ->
                    cmp x y /= GT)
@@ -90,8 +90,8 @@ insert cmp x b@(Braun s xs) =
                                         (foldr Unsized.consB Unsized.nilB gte))
                                    lt))
 
-delete :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
-delete cmp x b@(Braun s xs) =
+deleteBy :: (a -> a -> Ordering) -> a -> Braun a -> Braun a
+deleteBy cmp x b@(Braun s xs) =
     case break
              (\y -> cmp x y /= GT)
              (Unsized.toList xs) of
@@ -150,6 +150,18 @@ uncons (Braun n tr) = (fmap.fmap) (Braun (n-1)) (Unsized.uncons tr)
 
 uncons' :: Braun a -> (a, Braun a)
 uncons' (Braun n tr) = fmap (Braun (n-1)) (Unsized.uncons' tr)
+
+
+compRoot :: (a -> b -> Ordering) -> a -> Braun b -> Ordering
+compRoot cmp x (Braun _ (Node y _ _)) = cmp x y
+compRoot _ _ _ = error "Data.Braun.Sized.compRoot: empty tree"
+{-# INLINE compRoot #-}
+
+ltRoot :: (a -> b -> Ordering) -> a -> Braun b -> Bool
+ltRoot cmp x (Braun _ (Node y _ _)) = cmp x y == LT
+ltRoot _ _ _ = error "Data.Braun.ltRoot: empty tree"
+{-# INLINE ltRoot #-}
+
 -- |
 --
 -- prop> unfoldr unsnoc (fromList xs) === reverse xs

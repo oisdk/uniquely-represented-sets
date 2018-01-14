@@ -72,6 +72,7 @@ toListFB tr c n =
                   root _ = errorWithoutStackTrace "Data.Braun.toList: bug!"
 {-# INLINE toListFB #-}
 
+
 toList :: Tree a -> [a]
 toList tr = build (toListFB tr)
 {-# INLINABLE toList #-}
