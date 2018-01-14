@@ -4,6 +4,10 @@
 {-# LANGUAGE DeriveGeneric      #-}
 
 -- | This module provides a uniquely-represented Set type.
+--
+-- Uniquely represented sets means that elements inserted in any order
+-- are represented by the same set. This makes it useful for
+-- type-level programming, and some security applications.
 module Data.Set.Unique
   (
    -- * Set type
@@ -35,7 +39,6 @@ module Data.Set.Unique
    -- * Size invariant
    szfn)
   where
-
 
 import           Control.DeepSeq       (NFData (rnf))
 import           Data.Data             (Data)
