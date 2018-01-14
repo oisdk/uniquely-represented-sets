@@ -14,7 +14,7 @@ import           GHC.Base         (build)
 -- >>> import qualified Data.Braun as Unsized
 -- >>> let shuffleProp f = (arbitrary :: Gen [Int]) >>= \xs -> shuffle xs >>= \ys -> pure (f xs ys)
 -- >>> let safeInit xs = if null xs then [] else init xs
--- >>> let fromAscListIns xs = foldr insert empty (xs :: [Int])
+-- >>> let fromListIns xs = foldr insert empty (xs :: [Int])
 
 data Set a = Set
     { size :: {-# UNPACK #-} !Int
@@ -90,12 +90,12 @@ validSizes (Set _ b) = null xs || it && re where
 -- >>> toList (foldr insert empty [3,1,2,5,4,3,6])
 -- [1,2,3,4,5,6]
 --
--- prop> length (nub xs) === size (fromAscListIns xs)
--- prop> all Braun.validSize (tree (fromAscListIns xs))
--- prop> Braun.validSize (tree (fromAscListIns xs))
--- prop> Unsized.isBraun (Braun.tree (tree (fromAscListIns xs)))
--- prop> all (Unsized.isBraun . Braun.tree) (tree (fromAscListIns xs))
--- prop> validSizes (fromAscListIns xs)
+-- prop> length (nub xs) === size (fromListIns xs)
+-- prop> all Braun.validSize (tree (fromListIns xs))
+-- prop> Braun.validSize (tree (fromListIns xs))
+-- prop> Unsized.isBraun (Braun.tree (tree (fromListIns xs)))
+-- prop> all (Unsized.isBraun . Braun.tree) (tree (fromListIns xs))
+-- prop> validSizes (fromListIns xs)
 -- prop> shuffleProp (\xs ys -> foldr insert empty xs == foldr insert empty ys)
 -- prop> shuffleProp (\xs ys -> fromAscList (sort (nub xs)) === foldr insert empty ys)
 insert :: Ord a => a -> Set a -> Set a
@@ -119,7 +119,7 @@ insertBy cmp x pr@(Set n xs) =
 
 -- |
 --
---  prop> delete x (fromAscListIns (nub (x:xs))) === fromAscListIns [ y | y <- nub xs, x /= y ]
+--  prop> delete x (fromListIns (nub (x:xs))) === fromListIns [ y | y <- nub xs, x /= y ]
 delete :: Ord a => a -> Set a -> Set a
 delete = deleteBy compare
 
@@ -142,7 +142,7 @@ lookupBy cmp x (Set _ xs) = do
 
 -- |
 --
--- prop> member x (fromAscListIns xs) === any (x==) xs
+-- prop> member x (fromListIns xs) === any (x==) xs
 member :: Ord a => a -> Set a -> Bool
 member x xs = isJust (lookupBy compare x xs)
 
