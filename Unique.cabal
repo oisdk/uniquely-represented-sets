@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9a6ca75cf01e51b52b5e54c0f9d30bba3b22de5d1c13cacc9473c5ed1a1e5015
+-- hash: bf867308d68b46a75382ba547e70012a1db22e671e16810a22a7570be3682645
 
 name:           Unique
 version:        0.1.0.0
@@ -50,6 +50,7 @@ test-suite Unique-test
       QuickCheck
     , Unique
     , base >=4.7 && <5
+    , checkers
     , doctest
   other-modules:
       Paths_Unique

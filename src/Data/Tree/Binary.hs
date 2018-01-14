@@ -12,9 +12,10 @@ module Data.Tree.Binary
   ,unfoldTree
   ,replicateTree
   ,replicateA
-  ,treeFromList
+  ,fromList
   ,zygoTree
-  ,drawBinaryTree)
+  ,drawBinaryTree
+  ,singleton)
   where
 
 import           Control.DeepSeq      (NFData (..))
@@ -24,18 +25,14 @@ import           Data.Monoid
 import           Data.Typeable        (Typeable)
 import           GHC.Generics         (Generic, Generic1)
 
-import           Data.Bifunctor
-import           Data.Bool
-import           Data.Function
 import           Control.Applicative
 import           Data.Functor.Identity
 import           Text.Read
 import           Text.Read.Lex
+import           Data.List (uncons)
+import           Data.Maybe (fromMaybe)
 
--- $setup
--- >>> import Test.QuickCheck
-
--- | A simple binary tree for use in some of the heaps.
+-- | A simple binary tree.
 data Tree a
     = Leaf
     | Node a
@@ -43,6 +40,10 @@ data Tree a
            (Tree a)
     deriving (Show,Read,Eq,Ord,Functor,Foldable,Traversable,Typeable
              ,Generic,Generic1,Data)
+
+singleton :: a -> Tree a
+singleton x = Node x Leaf Leaf
+{-# INLINE singleton #-}
 
 instance NFData a =>
          NFData (Tree a) where
@@ -62,6 +63,9 @@ instance Ord1 Tree where
     liftCompare _ Leaf _ = LT
     liftCompare _ _ Leaf = GT
 
+-- |
+--
+-- prop> show (xs :: Tree Int) === liftShowsPrec showsPrec showList 0 xs ""
 instance Show1 Tree where
     liftShowsPrec s _ = go where
       go _ Leaf = showString "Leaf"
@@ -87,6 +91,8 @@ instance Read1 Tree where
         expect' = lift . expect
 
 -- | Fold over a tree.
+--
+-- prop> foldTree Leaf Node xs === xs
 foldTree :: b -> (a -> b -> b -> b) -> Tree a -> b
 foldTree b f = go where
   go Leaf         = b
@@ -161,7 +167,12 @@ unfoldTree f = go where
 replicateTree :: Int -> a -> Tree a
 replicateTree n x = runIdentity (replicateA n (Identity x))
 
--- | @'replicateA' n a@ replicates the action @a@ @n@ times.
+-- | @'replicateA' n a@ replicates the action @a@ @n@ times, trying
+-- to balance the result as much as possible. The actions are executed
+-- in a preorder traversal (same as the 'Foldable' instance.)
+--
+-- >>> toList (evalState (replicateA 10 (State (\s -> (s, s + 1)))) 1)
+-- [1,2,3,4,5,6,7,8,9,10]
 replicateA :: Applicative f => Int -> f a -> f (Tree a)
 replicateA n x = go n
   where
@@ -174,25 +185,39 @@ replicateA n x = go n
         r = go d
 {-# SPECIALIZE replicateA :: Int -> Identity a -> Identity (Tree a) #-}
 
+-- | This instance is necessarily inefficient, to obey the monoid laws.
+--
+-- >>> putStr (drawBinaryTree (fromList [1..6]))
+--    1
+--  2   5
+-- 3 4 6
+--
+-- >>> putStr (drawBinaryTree (fromList [1..6] `mappend` singleton 7))
+--    1
+--  2   5
+-- 3 4 6 7
+--
+-- 'mappend' distributes over 'toList':
+--
+-- prop> toList (mappend xs (ys :: Tree Int)) === mappend (toList xs) (toList ys)
 instance Monoid (Tree a) where
     mappend Leaf y         = y
     mappend (Node x l r) y = Node x l (mappend r y)
     mempty = Leaf
 
--- | Construct a tree from a list, putting each even-positioned
--- element to the left.
-treeFromList :: [a] -> Tree a
-treeFromList [] = Leaf
-treeFromList (x:xs) = uncurry (Node x `on` treeFromList) (pairs xs) where
-  pairs ys = foldr f (const ([],[])) ys True
-  f e a b = bool first second b (e:) (a (not b))
+-- | Construct a tree from a list, in an preorder fashion.
+fromList :: [a] -> Tree a
+fromList xs = evalState (replicateA n u) xs
+  where
+    n = length xs
+    u = State (fromMaybe (error "Data.Tree.Binary.fromList: bug!") . uncons)
 
 -- | Pretty-print a tree.
 --
--- >>> putStr (drawBinaryTree (treeFromList [1..7]))
+-- >>> putStr (drawBinaryTree (fromList [1..7]))
 --    1
---  3   2
--- 7 5 6 4
+--  2   5
+-- 3 4 6 7
 drawBinaryTree :: Show a => Tree a -> String
 drawBinaryTree = foldr (. (:) '\n') "" . snd . foldTree (0, []) f
   where
@@ -213,3 +238,42 @@ zipLongest ldef rdef fn = go
     go (x:xs) (y:ys) = fn x y : go xs ys
     go [] ys = map (fn ldef) ys
     go xs [] = map (`fn` rdef) xs
+
+newtype State s a = State
+    { runState :: s -> (a, s)
+    } deriving (Functor)
+
+instance Applicative (State s) where
+    pure x = State (\s -> (x, s))
+    fs <*> xs =
+        State
+            (\s ->
+                  case runState fs s of
+                      (f,s') ->
+                          case runState xs s' of
+                              (x,s'') -> (f x, s''))
+
+evalState :: State s a -> s -> a
+evalState xs s = fst (runState xs s)
+
+-- $setup
+-- >>> :set -XDeriveFunctor
+-- >>> import Test.QuickCheck
+-- >>> import Data.Foldable
+-- >>> :{
+-- instance Arbitrary a =>
+--          Arbitrary (Tree a) where
+--     arbitrary = sized go
+--       where
+--         go 0 = pure Leaf
+--         go n
+--           | n <= 0 = pure Leaf
+--           | otherwise = oneof [pure Leaf, liftA3 Node arbitrary sub sub]
+--           where
+--             sub = go (n `div` 2)
+--     shrink Leaf = []
+--     shrink (Node x l r) =
+--         Leaf : l : r :
+--         [ Node x' l' r'
+--         | (x',l',r') <- shrink (x, l, r) ]
+-- :}

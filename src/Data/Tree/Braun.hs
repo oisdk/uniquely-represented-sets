@@ -8,16 +8,18 @@ import           Data.Tree.Binary (Tree (..), zygoTree)
 import           GHC.Base  (build)
 import           Prelude hiding (tail)
 
--- $setup
--- >>> import Test.QuickCheck
--- >>> import Data.List (unfoldr)
--- >>> :{
--- instance Arbitrary a => Arbitrary (Tree a) where
---   arbitrary = fmap fromList arbitrary
---   shrink = fmap fromList . shrink . toList
--- :}
 
--- |
+-- | /O(n)/. Create a Braun tree (in order) from a list. The algorithm
+-- is similar to that in:
+--
+-- Okasaki, Chris. ‘Three Algorithms on Braun Trees’. Journal of
+-- Functional Programming 7, no. 6 (November 1997): 661–666.
+-- https://doi.org/10.1017/S0956796897002876.
+--
+-- However, it uses a fold rather than explicit recursion, allowing
+-- fusion.
+--
+-- Inlined sufficiently, the implementation is:
 --
 -- prop> toList (fromList xs) == (xs :: [Int])
 fromList :: [a] -> Tree a
@@ -181,3 +183,13 @@ tail (Node _ y z) = Node lp z q
   where
     (lp,q) = uncons' y
 tail Leaf = Leaf
+
+-- $setup
+-- >>> import Test.QuickCheck
+-- >>> import Data.List (unfoldr)
+-- >>> import qualified Data.Tree.Binary as Binary
+-- >>> :{
+-- instance Arbitrary a => Arbitrary (Tree a) where
+--   arbitrary = fmap fromList arbitrary
+--   shrink = fmap fromList . shrink . toList
+-- :}
