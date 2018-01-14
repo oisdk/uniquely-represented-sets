@@ -1,12 +1,13 @@
-{-# LANGUAGE BangPatterns  #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE RankNTypes    #-}
+{-# LANGUAGE BangPatterns       #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveGeneric      #-}
 
 module Data.Tree.Braun.Sized
   (-- * Braun type
   Braun(..)
   -- * Construction
-  , fromList
+  ,fromList
   ,empty
   ,singleton
   -- ** Building
@@ -34,18 +35,24 @@ module Data.Tree.Braun.Sized
   )
   where
 
-import           Data.Tree.Binary (Tree (..))
-import           Data.Tree.Braun  (UpperBound (..))
-import qualified Data.Tree.Braun  as Unsized
+import           Data.Tree.Binary         (Tree (..))
+import           Data.Tree.Braun          (UpperBound (..))
+import qualified Data.Tree.Braun          as Unsized
 import           Data.Tree.Braun.Internal (zipLevels)
 
-import           Control.DeepSeq  (NFData (rnf))
+import           Control.DeepSeq          (NFData (rnf))
+import           Data.Data                (Data)
+import           Data.Typeable            (Typeable)
+import           GHC.Generics             (Generic, Generic1)
+
+import           Control.Applicative      hiding (empty)
 
 -- | A Braun tree which keeps track of its size.
 data Braun a = Braun
     { size :: {-# UNPACK #-} !Int
     , tree :: Tree a
-    } deriving (Eq, Show, Functor)
+    } deriving (Show,Read,Eq,Ord,Functor,Typeable,Generic,Generic1
+               ,Data)
 
 instance NFData a => NFData (Braun a) where
     rnf (Braun _ tr) = rnf tr
@@ -53,6 +60,13 @@ instance NFData a => NFData (Braun a) where
 instance Foldable Braun where
     foldr f b (Braun _ xs) = Unsized.foldrBraun xs f b
     length = size
+
+instance Traversable Braun where
+    traverse f (Braun n tr) = fmap k (Unsized.foldrBraun tr c b)
+      where
+        c = liftA2 Unsized.consB . f
+        b = pure Unsized.nilB
+        k = Braun n . Unsized.runB
 
 snoc :: a -> Braun a -> Braun a
 snoc x (Braun 0 Leaf) = Braun 1 (Node x Leaf Leaf)
@@ -78,9 +92,17 @@ runB :: Builder a (Braun a) (Braun a) -> Braun a
 runB xs = xs 1 1 0 (const (flip Braun . head))
 {-# INLINE runB #-}
 
--- |
+-- | /O(n)/. Create a Braun tree (in order) from a list. The algorithm
+-- is similar to that in:
 --
--- prop> size (fromList xs) == length xs
+-- Okasaki, Chris. ‘Three Algorithms on Braun Trees’. Journal of
+-- Functional Programming 7, no. 6 (November 1997): 661–666.
+-- https://doi.org/10.1017/S0956796897002876.
+--
+-- However, it uses a fold rather than explicit recursion, allowing
+-- fusion.
+--
+-- prop> toList (fromList xs) === xs
 fromList :: [a] -> Braun a
 fromList xs = runB (foldr consB nilB xs)
 {-# INLINABLE fromList #-}
