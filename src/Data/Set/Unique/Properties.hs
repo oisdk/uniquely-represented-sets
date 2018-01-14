@@ -14,7 +14,7 @@ import           Data.Functor.Classes
 -- | Check that the sizes of the inner Braun trees obey the size
 -- bound.
 sizesInBound :: Set a -> Bool
-sizesInBound (Set _ b) = null xs || it && re where
+sizesInBound (Set b) = null xs || it && re where
   xs = toList b
   it = and $ zipWith (\x y -> Braun.size x == szfn y) (safeInit xs) [1..]
   safeInit [] = []
@@ -23,7 +23,7 @@ sizesInBound (Set _ b) = null xs || it && re where
 
 -- | Check that all inner trees are Braun trees.
 allBraun :: Set a -> Bool
-allBraun (Set _ b) = Braun.isBraun b && all Braun.isBraun b
+allBraun (Set b) = Braun.isBraun b && all Braun.isBraun b
 
 -- | Check that the elements are stored in the correct order.
 inOrder :: (a -> a -> Ordering) -> Set a -> Bool
@@ -38,8 +38,8 @@ inOrder cmp xs =
 
 -- | Check that all inner trees store the correct size.
 allCorrectSizes :: Set a -> Bool
-allCorrectSizes (Set _ b) = Braun.validSize b && all Braun.validSize b
+allCorrectSizes (Set b) = Braun.validSize b && all Braun.validSize b
 
 -- | Check that the stored size is correct.
 validSize :: Set a -> Bool
-validSize s@(Set n _) = n == foldl' (\a _ -> a + 1) 0 s
+validSize s = length s == foldl' (\a _ -> a + 1) 0 s

@@ -172,6 +172,7 @@ unfoldTree f = go where
   go = maybe Leaf (\(x,l,r) -> Node x (go l) (go r)) . f
 
 -- | @'replicate' n a@ creates a tree of size @n@ filled @a@.
+--
 -- >>> putStr (drawBinaryTree (replicate 4 ()))
 --     ()
 --   ()  ()

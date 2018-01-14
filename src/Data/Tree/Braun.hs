@@ -159,8 +159,8 @@ replicate m x = go m (const id)
       | odd n = go (pred n `div` 2) $ \s t -> k (Node x s t) (Node x t t)
       | otherwise = go (pred n `div` 2) $ \s t -> k (Node x s s) (Node x s t)
 
--- | Retrieve the element at the specified position, raising an
--- error if it's not present.
+-- | /O(log n)/. Retrieve the element at the specified position,
+-- raising an error if it's not present.
 --
 -- prop> \(NonNegative n) xs -> n < length xs ==> fromList xs ! n == xs !! n
 (!) :: HasCallStack => Tree a -> Int -> a
@@ -171,8 +171,8 @@ replicate m x = go m (const id)
     where j = (i-1) `div` 2
 (!) _ _ = error "Data.Tree.Braun.!: index out of range"
 
--- | Retrieve the element at the specified position, or 'Nothing'
--- the index is out of range.
+-- | /O(log n)/. Retrieve the element at the specified position, or
+-- 'Nothing' if the index is out of range.
 (!?) :: Tree a -> Int -> Maybe a
 (!?) (Node x _ _) 0 = Just x
 (!?) (Node _ y z) i

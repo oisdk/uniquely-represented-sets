@@ -52,16 +52,15 @@ import           GHC.Generics          (Generic, Generic1)
 
 -- | A uniquely-represented set.
 data Set a = Set
-    { size :: {-# UNPACK #-} !Int
-    , tree :: Braun (Braun a)
+    { tree :: Braun (Braun a)
     } deriving (Show,Read,Eq,Ord,Functor,Typeable,Generic,Generic1,Data)
 
 instance NFData a => NFData (Set a) where
-    rnf (Set _ xs) = rnf xs
+    rnf (Set xs) = rnf xs
 
 -- | A type suitable for building a 'Set' by repeated applications
 -- of 'consB'.
-type Builder a b c = Int -> Int -> Int -> (Braun.Builder a (Braun a) -> Braun.Builder (Braun a) b -> Int -> c) -> c
+type Builder a b c = Int -> Int -> (Braun.Builder a (Braun a) -> Braun.Builder (Braun a) b -> c) -> c
 
 -- | The size invariant. The nth Braun tree in the set has size
 -- szfn n.
@@ -89,44 +88,43 @@ fromListBy cmp xs = runB (foldr f (const nilB) (sortBy cmp xs) (const False))
 
 -- | /O(1)/. Push an element to the front of a 'Builder'.
 consB :: a -> Builder a c d -> Builder a c d
-consB e a !k 1 !s p =
+consB e a !k 1 p =
     a
         (k + 1)
         (szfn k)
-        (s + 1)
         (\ys zs ->
               p Braun.nilB (Braun.consB (Braun.runB (Braun.consB e ys)) zs))
-consB e a !k !i !s p = a k (i - 1) (s + 1) (p . Braun.consB e)
+consB e a !k !i p = a k (i - 1) (p . Braun.consB e)
 {-# INLINE consB #-}
 
 -- | An empty 'Builder'.
 nilB :: Builder a b c
-nilB _ _ s p = p Braun.nilB Braun.nilB s
+nilB _ _ p = p Braun.nilB Braun.nilB
 {-# INLINE nilB #-}
 
 -- | Convert a 'Builder' to a 'Set'.
 runB :: Builder a (Braun (Braun a)) (Set a)-> Set a
-runB xs = xs 1 1 0 (\_ r s -> Set s (Braun.runB r))
+runB xs = xs 1 1 (const (Set . Braun.runB))
 {-# INLINE runB #-}
 
 -- | The empty set.
 empty :: Set a
-empty = Set 0 (Braun 0 Leaf)
+empty = Set (Braun 0 Leaf)
 {-# INLINE empty #-}
 
 -- | Create a set with one element.
 singleton :: a -> Set a
-singleton x = Set 1 (Braun 1 (Node (Braun 1 (Node x Leaf Leaf)) Leaf Leaf))
+singleton x = Set (Braun 1 (Node (Braun 1 (Node x Leaf Leaf)) Leaf Leaf))
 {-# INLINE singleton #-}
 
 -- | 'toList' is /O(n)/.
 --
 -- prop> toList (fromDistinctAscList xs) === xs
 instance Foldable Set where
-    foldr f b (Set _ xs) = foldr (flip (foldr f)) b xs
-    toList (Set _ xs) = build (\c n -> foldr (flip (foldr c)) n xs)
+    foldr f b (Set xs) = foldr (flip (foldr f)) b xs
+    toList (Set xs) = build (\c n -> foldr (flip (foldr c)) n xs)
     {-# INLINABLE toList #-}
-    length (Set n _) = n
+    length (Set (Braun _ xs)) = foldl' (\a e -> a + Braun.size e) 0 xs
 
 -- | /O(n)/. Create a set from a list of ordered, distinct elements.
 --
@@ -147,17 +145,17 @@ insert = insertBy compare
 --
 -- prop> insert x xs === insertBy compare x xs
 insertBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
-insertBy cmp x pr@(Set n xs) =
+insertBy cmp x pr@(Set xs) =
     case ys of
         [] -> singleton x
         (y:yys) ->
             case breakThree (Braun.ltRoot cmp x) ys of
                 Nothing ->
-                    Set (n + 1) (Braun.fromList (fixupList (Braun.cons x y : yys)))
+                    Set (Braun.fromList (fixupList (Braun.cons x y : yys)))
                 Just (lt,eq,gt)
                   | Braun.size eq == Braun.size new -> pr
                   | otherwise ->
-                      Set (n + 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
+                      Set (Braun.fromList (fixupList (lt ++ (new : gt))))
                     where new = Braun.insertBy cmp x eq
   where
     ys = toList xs
@@ -171,18 +169,18 @@ delete = deleteBy compare
 --
 -- prop> delete x xs === deleteBy compare x xs
 deleteBy :: (a -> a -> Ordering) -> a -> Set a -> Set a
-deleteBy cmp x pr@(Set n xs) =
+deleteBy cmp x pr@(Set xs) =
     case breakThree (Braun.ltRoot cmp x) (toList xs) of
         Nothing -> pr
         Just (lt,eq,gt)
           | Braun.size eq == Braun.size new -> pr
-          | otherwise -> Set (n - 1) (Braun.fromList (fixupList (lt ++ (new : gt))))
+          | otherwise -> Set (Braun.fromList (fixupList (lt ++ (new : gt))))
             where new = Braun.deleteBy cmp x eq
 
 -- | /O(log^2 n)/. Lookup an element according to the supplied
 -- ordering function in the set.
 lookupBy :: (a -> a -> Ordering) -> a -> Set a -> Maybe a
-lookupBy cmp x (Set _ xs) = do
+lookupBy cmp x (Set xs) = do
     ys <- Braun.glb (Braun.cmpRoot cmp) x xs
     y <- Braun.glb cmp x ys
     case cmp x y of
