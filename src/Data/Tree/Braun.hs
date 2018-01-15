@@ -37,8 +37,8 @@ import           Data.Tree.Binary (Tree (..))
 import qualified Data.Tree.Binary as Binary
 import           GHC.Base  (build)
 import           Prelude hiding (tail, replicate)
-import           Data.Tree.Braun.Internal (zipLevels)
 import           GHC.Stack
+import           Data.Tree.Braun.Internal (zipLevels)
 
 -- | A Braun tree with one element.
 singleton :: a -> Tree a
@@ -65,7 +65,7 @@ empty = Leaf
 -- @
 -- fromList :: [a] -> 'Tree' a
 -- fromList xs = 'foldr' f b xs 1 1 ('const' 'head') where
---   f e a !k 1  p = a (k'*'2) k     (\ys zs -> p n (g e ys zs ('drop' k zs)))
+--   f e a !k 1  p = a (k'*'2) k     (\\ys zs -> p n (g e ys zs ('drop' k zs)))
 --   f e a !k !m p = a k     (m'-'1) (p . g e)
 --
 --   g x a (y:ys) (z:zs) = 'Node' x y    z    : a ys zs
@@ -104,28 +104,28 @@ runB :: Builder a (Tree a) -> Tree a
 runB b = b 1 1 (const head)
 {-# INLINE runB #-}
 
+data NodeList a = Nil | Cons a (Tree a) (Tree a) (NodeList a)
 
 -- | Perform a right fold, in Braun order, over a tree.
 foldrBraun :: Tree a -> (a -> b -> b) -> b -> b
-foldrBraun tr c n =
-    case tr of
-        Leaf -> n
-        _ -> tol [tr]
-            where tol [] = n
-                  tol xs = foldr (c . root) (tol (children xs id)) xs
-                  children [] k = k []
-                  children (Node _ Leaf _:_) k = k []
-                  children (Node _ l Leaf:ts) k =
-                      l : foldr leftChildren (k []) ts
-                  children (Node _ l r:ts) k = l : children ts (k . (:) r)
-                  children _ _ =
-                      errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
-                  leftChildren (Node _ Leaf _) _ = []
-                  leftChildren (Node _ l _) a = l : a
-                  leftChildren _ _ =
-                      errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
-                  root (Node x _ _) = x
-                  root _ = errorWithoutStackTrace "Data.Tree.Braun.toList: bug!"
+foldrBraun tr c n = tol (singNodeList tr)
+  where
+    singNodeList Leaf = Nil
+    singNodeList (Node x l r) = Cons x l r Nil
+    tol Nil = n
+    tol xs = goc xs (tol (children xs id))
+    goc Nil b = b
+    goc (Cons x _ _ ts) b = c x (goc ts b)
+    children Nil k = k Nil
+    children (Cons _ Leaf _ _) k = k Nil
+    children (Cons _ (Node x l r) rt ts) k =
+        Cons x l r
+            (case rt of
+                 Leaf -> leftChildren ts (k Nil)
+                 Node x' l' r' -> children ts (k . Cons x' l' r'))
+    leftChildren Nil b = b
+    leftChildren (Cons _ Leaf _ _) _ = Nil
+    leftChildren (Cons _ (Node x l r) _ ts) a = Cons x l r (leftChildren ts a)
 {-# INLINE foldrBraun #-}
 
 -- | /O(n)/. Convert a Braun tree to a list.
@@ -206,10 +206,10 @@ ub f x t = go f x t 0 1
 -- prop> uncons (cons x xs) === Just (x,xs)
 -- prop> unfoldr uncons (fromList xs) === xs
 uncons :: Tree a -> Maybe (a, Tree a)
-uncons (Node x Leaf Leaf) = Just (x, Leaf)
-uncons (Node x y z) = Just (x, Node lp z q)
-  where
-    Just (lp,q) = uncons y
+uncons (Node x' l' r') = Just (go x' l' r') where
+  go x Leaf _ = (x, Leaf)
+  go x (Node lx ll lr) r = (x, Node lp r q) where
+    (lp,q) = go lx ll lr
 uncons Leaf = Nothing
 
 -- | /O(log n)/. Returns the first element in the array and the rest
@@ -218,10 +218,10 @@ uncons Leaf = Nothing
 --
 -- prop> uncons' (cons x xs) === (x,xs)
 uncons' :: HasCallStack => Tree a -> (a, Tree a)
-uncons' (Node x Leaf Leaf) = (x, Leaf)
-uncons' (Node x y z) = (x, Node lp z q)
-  where
-    (lp,q) = uncons' y
+uncons' (Node x' l' r') = go x' l' r' where
+  go x Leaf _ = (x, Leaf)
+  go x (Node lx ll lr) r = (x, Node lp r q) where
+    (lp,q) = go lx ll lr
 uncons' Leaf = error "Data.Tree.Braun.uncons': empty tree"
 
 -- | /O(log n)/. Append an element to the beginning of the Braun tree.
