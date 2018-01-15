@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/oisdk/uniquely-represented-sets.svg)](https://travis-ci.org/oisdk/uniquely-represented-sets)
+[![Hackage](https://img.shields.io/hackage/v/uniquely-represented-sets.svg)](https://hackage.haskell.org/package/uniquely-represented-sets) [![Build Status](https://travis-ci.org/oisdk/uniquely-represented-sets.svg)](https://travis-ci.org/oisdk/uniquely-represented-sets)
 
 # uniquely-represented-sets
 
